@@ -1,26 +1,15 @@
-# Assam MDM Live Dashboard
+# Assam MDM Dashboard V2
 
-A Flask dashboard for Assam MDM/PM POSHAN reporting data.
+This version fixes `TemplateNotFound: index.html`.
 
-## Features
+The frontend is now a single `index.html` file in the repository root, and Flask serves it directly.
+No `templates/` or `static/` folders are required.
 
-- District live summary
-- District → Block → Cluster → School drill-down
-- Total schools, daily reporting, pending reporting, meals served
-- Search and manual refresh
-- Responsive dashboard layout
-- Render-ready production configuration
-- No school contact/mobile-number harvesting
+Upload these files to the ROOT of your GitHub repository:
+- app.py
+- index.html
+- requirements.txt
+- render.yaml
+- Procfile
 
-## Local Run
-
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
-Then open `http://127.0.0.1:5000`.
-
-## Render
-
-See `DEPLOY_RENDER.md`.
+Then commit to `main`. Render should auto-deploy.

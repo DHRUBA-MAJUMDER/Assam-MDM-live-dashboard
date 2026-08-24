@@ -1,5 +1,5 @@
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -140,7 +140,7 @@ def parse_schools(district_code, block_code, cluster_code):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "index.html")
 
 
 @app.get("/healthz")

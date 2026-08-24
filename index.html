@@ -5,10 +5,44 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Assam MDM Live Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
+<style>
+
+:root{
+  --bg:#f4f7fb;--card:#fff;--text:#152033;--muted:#6c788c;--line:#e5eaf1;
+  --accent:#2457d6;--accent2:#173f9e;--danger:#d64949;--good:#15803d;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.app-shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+.sidebar{background:#0f1f3d;color:#fff;padding:26px 18px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.logo{width:48px;height:48px;border-radius:14px;background:#fff;color:#173f9e;display:grid;place-items:center;font-weight:800}
+.brand h1{font-size:18px;margin:0}.brand p{margin:3px 0 0;color:#aebbd3;font-size:12px}
+nav{display:grid;gap:8px}.nav-item{border:0;background:transparent;color:#c8d3e8;padding:12px 14px;text-align:left;border-radius:10px;font-weight:600;cursor:pointer}
+.nav-item.active,.nav-item:hover{background:#1a315c;color:#fff}
+.sidebar-note{margin-top:auto;color:#9fb0cb;font-size:12px;line-height:1.5}
+main{padding:28px;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:24px}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.15em;color:var(--accent);margin:0 0 7px}
+.topbar h2{margin:0;font-size:26px}
+.actions{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px}
+button#refreshBtn{background:var(--accent);color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.stat span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}.stat strong{font-size:28px}.stat.danger strong{color:var(--danger)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.panel-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;align-items:center}
+.panel-head h3{margin:0 0 5px}.panel-head p{margin:0;color:var(--muted);font-size:12px}
+#search{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:240px;font:inherit}
+.table-wrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+th{background:#f8fafc;color:#516077;font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+tbody tr:hover{background:#f8fbff}.link{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:none}.good{color:var(--good);font-weight:700}.bad{color:var(--danger);font-weight:700}
+.loader{padding:14px 20px;background:#eef4ff;color:var(--accent2);font-weight:700}.hidden{display:none}
+@media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{display:none}main{padding:16px}.stats{grid-template-columns:repeat(2,1fr)}.topbar{align-items:flex-start;flex-direction:column}.panel-head{align-items:stretch;flex-direction:column}#search{min-width:0;width:100%}}
+
+</style>
 </head>
 <body>
 <div class="app-shell">
@@ -61,6 +95,124 @@
     </section>
   </main>
 </div>
-<script src="/static/app.js"></script>
+<script>
+
+const $ = s => document.querySelector(s);
+let currentRows = [];
+let currentLevel = "district";
+let context = {};
+
+function fmt(n){ return Number(n||0).toLocaleString("en-IN"); }
+function setLoading(v){ $("#loader").classList.toggle("hidden", !v); }
+function setUpdated(){ $("#lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString(); }
+
+async function api(url){
+  setLoading(true);
+  try{
+    const r = await fetch(url, {headers: {"Accept": "application/json"}});
+    const text = await r.text();
+    let j;
+    try {
+      j = JSON.parse(text);
+    } catch (_) {
+      throw new Error(`Backend returned HTTP ${r.status} instead of JSON.`);
+    }
+    if(!r.ok || !j.ok) throw new Error(j.error || `Request failed (${r.status})`);
+    return j.data;
+  } finally { setLoading(false); }
+}
+
+function stats(rows){
+  $("#sTotal").textContent = fmt(rows.reduce((a,r)=>a+(r.totalSchools||0),0));
+  $("#sReported").textContent = fmt(rows.reduce((a,r)=>a+(r.dailyReported||0),0));
+  $("#sPending").textContent = fmt(rows.reduce((a,r)=>a+(r.dailyNotReported||0),0));
+  $("#sMeals").textContent = fmt(rows.reduce((a,r)=>a+(r.mealsServed||0),0));
+}
+
+function renderDistricts(rows){
+  currentLevel="district"; currentRows=rows;
+  $("#panelTitle").textContent="District Overview"; $("#breadcrumb").textContent="Assam";
+  $("#search").placeholder="Search district...";
+  $("#thead").innerHTML=`<tr><th>District</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>`;
+  $("#tbody").innerHTML=rows.map(r=>`<tr>
+    <td><a class="link" data-district="${r.districtCode}" data-name="${r.district}">${r.district}</a></td>
+    <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
+    <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
+  </tr>`).join("");
+  stats(rows);
+}
+
+function renderBlocks(rows){
+  currentLevel="block"; currentRows=rows;
+  $("#panelTitle").textContent=`Blocks — ${context.districtName}`; $("#breadcrumb").textContent=`Assam / ${context.districtName}`;
+  $("#search").placeholder="Search block...";
+  $("#thead").innerHTML=`<tr><th>Block</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>`;
+  $("#tbody").innerHTML=rows.map(r=>`<tr>
+    <td><a class="link" data-block="${r.blockCode}" data-name="${r.block}">${r.block}</a></td>
+    <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
+    <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
+  </tr>`).join("");
+  stats(rows);
+}
+
+function renderClusters(rows){
+  currentLevel="cluster"; currentRows=rows;
+  $("#panelTitle").textContent=`Clusters — ${context.blockName}`; $("#breadcrumb").textContent=`Assam / ${context.districtName} / ${context.blockName}`;
+  $("#search").placeholder="Search cluster...";
+  $("#thead").innerHTML=`<tr><th>Cluster</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>`;
+  $("#tbody").innerHTML=rows.map(r=>`<tr>
+    <td><a class="link" data-cluster="${r.clusterCode}" data-name="${r.cluster}">${r.cluster}</a></td>
+    <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
+    <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
+  </tr>`).join("");
+  stats(rows);
+}
+
+function renderSchools(rows){
+  currentLevel="school"; currentRows=rows;
+  $("#panelTitle").textContent=`Schools — ${context.clusterName}`;
+  $("#breadcrumb").textContent=`Assam / ${context.districtName} / ${context.blockName} / ${context.clusterName}`;
+  $("#search").placeholder="Search school...";
+  $("#thead").innerHTML=`<tr><th>School</th><th>School Code</th><th>Shift</th><th>Monthly Status</th><th>Enrolled</th><th>Daily Status</th><th>Meals Served</th></tr>`;
+  $("#tbody").innerHTML=rows.map(r=>`<tr>
+    <td>${r.school}</td><td>${r.schoolCode}</td><td>${r.shift}</td>
+    <td class="${r.monthlyStatus==='Yes'?'good':'bad'}">${r.monthlyStatus}</td>
+    <td>${fmt(r.enrolled)}</td><td class="${r.dailyStatus==='Yes'?'good':'bad'}">${r.dailyStatus}</td><td>${fmt(r.mealsServed)}</td>
+  </tr>`).join("");
+  $("#sTotal").textContent=fmt(rows.length);
+  $("#sReported").textContent=fmt(rows.filter(r=>r.dailyStatus==="Yes").length);
+  $("#sPending").textContent=fmt(rows.filter(r=>r.dailyStatus!=="Yes").length);
+  $("#sMeals").textContent=fmt(rows.reduce((a,r)=>a+(r.mealsServed||0),0));
+}
+
+async function loadDistricts(){ const rows=await api("/api/districts"); renderDistricts(rows); setUpdated(); }
+async function loadBlocks(code,name){ context={districtCode:code,districtName:name}; renderBlocks(await api(`/api/blocks?districtCode=${encodeURIComponent(code)}`)); setUpdated(); }
+async function loadClusters(code,name){ context.blockCode=code;context.blockName=name;renderClusters(await api(`/api/clusters?districtCode=${context.districtCode}&blockCode=${encodeURIComponent(code)}`));setUpdated(); }
+async function loadSchools(code,name){ context.clusterCode=code;context.clusterName=name;renderSchools(await api(`/api/schools?districtCode=${context.districtCode}&blockCode=${context.blockCode}&clusterCode=${encodeURIComponent(code)}`));setUpdated(); }
+
+$("#tbody").addEventListener("click", e=>{
+  const a=e.target.closest("a.link"); if(!a) return;
+  if(a.dataset.district) loadBlocks(a.dataset.district,a.dataset.name);
+  else if(a.dataset.block) loadClusters(a.dataset.block,a.dataset.name);
+  else if(a.dataset.cluster) loadSchools(a.dataset.cluster,a.dataset.name);
+});
+
+$("#refreshBtn").addEventListener("click", ()=>{
+  if(currentLevel==="district") loadDistricts();
+  else if(currentLevel==="block") loadBlocks(context.districtCode,context.districtName);
+  else if(currentLevel==="cluster") loadClusters(context.blockCode,context.blockName);
+  else if(currentLevel==="school") loadSchools(context.clusterCode,context.clusterName);
+});
+
+$("#search").addEventListener("input", e=>{
+  const q=e.target.value.toLowerCase();
+  for(const tr of $("#tbody").rows){
+    tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";
+  }
+});
+
+loadDistricts().catch(err=>alert(err.message));
+
+</script>
 </body>
 </html>

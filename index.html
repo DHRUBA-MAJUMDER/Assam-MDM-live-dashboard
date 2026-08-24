@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,42 +5,77 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Assam MDM Live Dashboard</title>
 <style>
-
 :root{
   --bg:#f4f7fb;--card:#fff;--text:#152033;--muted:#6c788c;--line:#e5eaf1;
   --accent:#2457d6;--accent2:#173f9e;--danger:#d64949;--good:#15803d;
+  --warn:#b7791f;--nav:#0f1f3d;--nav2:#1a315c;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select{font:inherit}
 .app-shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-.sidebar{background:#0f1f3d;color:#fff;padding:26px 18px;display:flex;flex-direction:column}
+.sidebar{background:var(--nav);color:#fff;padding:26px 18px;display:flex;flex-direction:column}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:32px}
 .logo{width:48px;height:48px;border-radius:14px;background:#fff;color:#173f9e;display:grid;place-items:center;font-weight:800}
 .brand h1{font-size:18px;margin:0}.brand p{margin:3px 0 0;color:#aebbd3;font-size:12px}
-nav{display:grid;gap:8px}.nav-item{border:0;background:transparent;color:#c8d3e8;padding:12px 14px;text-align:left;border-radius:10px;font-weight:600;cursor:pointer}
-.nav-item.active,.nav-item:hover{background:#1a315c;color:#fff}
+nav{display:grid;gap:8px}
+.nav-item{border:0;background:transparent;color:#c8d3e8;padding:12px 14px;text-align:left;border-radius:10px;font-weight:600;cursor:pointer}
+.nav-item.active,.nav-item:hover{background:var(--nav2);color:#fff}
 .sidebar-note{margin-top:auto;color:#9fb0cb;font-size:12px;line-height:1.5}
 main{padding:28px;min-width:0}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:24px}
 .eyebrow{font-size:11px;font-weight:800;letter-spacing:.15em;color:var(--accent);margin:0 0 7px}
 .topbar h2{margin:0;font-size:26px}
 .actions{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px}
-button#refreshBtn{background:var(--accent);color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
+.primary-btn,.secondary-btn{border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
+.primary-btn{background:var(--accent);color:#fff}.secondary-btn{background:#edf2ff;color:var(--accent2)}
+.view{display:none}.view.active{display:block}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
-.stat span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}.stat strong{font-size:28px}.stat.danger strong{color:var(--danger)}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
+.stat span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
+.stat strong{font-size:28px;overflow-wrap:anywhere}
+.stat.danger strong{color:var(--danger)}
+.stat .sub{font-size:11px;color:var(--muted);margin-top:7px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:20px}
 .panel-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;align-items:center}
 .panel-head h3{margin:0 0 5px}.panel-head p{margin:0;color:var(--muted);font-size:12px}
-#search{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:240px;font:inherit}
+.search{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:240px;background:#fff}
 .table-wrap{overflow:auto}
 table{width:100%;border-collapse:collapse;min-width:900px}
 th,td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
-th{background:#f8fafc;color:#516077;font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
-tbody tr:hover{background:#f8fbff}.link{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:none}.good{color:var(--good);font-weight:700}.bad{color:var(--danger);font-weight:700}
-.loader{padding:14px 20px;background:#eef4ff;color:var(--accent2);font-weight:700}.hidden{display:none}
-@media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{display:none}main{padding:16px}.stats{grid-template-columns:repeat(2,1fr)}.topbar{align-items:flex-start;flex-direction:column}.panel-head{align-items:stretch;flex-direction:column}#search{min-width:0;width:100%}}
-
+th{background:#f8fafc;color:#516077;font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;z-index:1}
+tbody tr:hover{background:#f8fbff}
+.link{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:none}
+.good{color:var(--good);font-weight:700}.bad{color:var(--danger);font-weight:700}
+.loader{padding:14px 20px;background:#eef4ff;color:var(--accent2);font-weight:700}
+.hidden{display:none!important}
+.error{display:none;margin-bottom:16px;padding:12px 14px;border:1px solid #f3c4c4;background:#fff2f2;color:#9f2020;border-radius:12px;font-size:13px}
+.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:18px 20px}
+.field label{display:block;font-size:11px;font-weight:800;color:#5a687d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+.field select{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;color:var(--text)}
+.field select:disabled{background:#f3f5f8;color:#98a2b3}
+.hint{padding:0 20px 18px;color:var(--muted);font-size:12px}
+.meal-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+.meal-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
+.meal-card .scope{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.meal-card .name{font-size:14px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meal-card .value{font-size:27px;font-weight:800;margin-top:12px}
+.meal-card .share{font-size:11px;color:var(--muted);margin-top:7px}
+.bar{height:8px;background:#edf1f6;border-radius:999px;overflow:hidden;min-width:120px}
+.bar span{display:block;height:100%;background:var(--accent);border-radius:999px}
+.rank-cell{display:flex;align-items:center;gap:10px;min-width:220px}
+.rank-num{width:22px;color:var(--muted);font-size:11px}
+.breadcrumb-btns{display:flex;gap:8px;flex-wrap:wrap}
+.crumb-btn{border:1px solid var(--line);background:#fff;padding:7px 10px;border-radius:8px;color:var(--accent2);cursor:pointer;font-size:12px;font-weight:700}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+@media(max-width:1050px){.meal-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){
+  .app-shell{grid-template-columns:1fr}.sidebar{display:none}main{padding:16px}
+  .stats,.meal-grid{grid-template-columns:repeat(2,1fr)}
+  .topbar{align-items:flex-start;flex-direction:column}.panel-head{align-items:stretch;flex-direction:column}
+  .search{min-width:0;width:100%}.filters{grid-template-columns:1fr}
+}
+@media(max-width:520px){.stats,.meal-grid{grid-template-columns:1fr}.topbar h2{font-size:22px}}
 </style>
 </head>
 <body>
@@ -52,10 +86,11 @@ tbody tr:hover{background:#f8fbff}.link{color:var(--accent);font-weight:700;curs
       <div><h1>Assam MDM</h1><p>Live Monitor</p></div>
     </div>
     <nav>
-      <button class="nav-item active" data-view="districts">District Overview</button>
+      <button class="nav-item active" data-view="overview">District Overview</button>
       <button class="nav-item" data-view="drilldown">Drill-down</button>
+      <button class="nav-item" data-view="meals">Meals Served</button>
     </nav>
-    <div class="sidebar-note">Live data is read from public MDMHP summary endpoints.</div>
+    <div class="sidebar-note">Live operational data is read from public MDMHP summary endpoints.</div>
   </aside>
 
   <main>
@@ -66,153 +101,415 @@ tbody tr:hover{background:#f8fbff}.link{color:var(--accent);font-weight:700;curs
       </div>
       <div class="actions">
         <span id="lastUpdated">Not refreshed yet</span>
-        <button id="refreshBtn">Refresh</button>
+        <button id="refreshBtn" class="primary-btn">Refresh</button>
       </div>
     </header>
 
-    <section class="stats" id="stats">
-      <div class="stat"><span>Total Schools</span><strong id="sTotal">—</strong></div>
-      <div class="stat"><span>Daily Reported</span><strong id="sReported">—</strong></div>
-      <div class="stat danger"><span>Not Reported</span><strong id="sPending">—</strong></div>
-      <div class="stat"><span>Meals Served</span><strong id="sMeals">—</strong></div>
+    <div id="errorBox" class="error"></div>
+    <div id="globalLoader" class="loader hidden">Loading live data…</div>
+
+    <!-- DISTRICT OVERVIEW -->
+    <section id="view-overview" class="view active">
+      <section class="stats">
+        <div class="stat"><span>Total Schools</span><strong id="oTotal">—</strong></div>
+        <div class="stat"><span>Daily Reported</span><strong id="oReported">—</strong></div>
+        <div class="stat danger"><span>Not Reported</span><strong id="oPending">—</strong></div>
+        <div class="stat"><span>Meals Served</span><strong id="oMeals">—</strong></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div><h3>District Overview</h3><p>Click a district to open its blocks in Drill-down.</p></div>
+          <input id="overviewSearch" class="search" type="search" placeholder="Search district...">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>District</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr></thead>
+            <tbody id="overviewBody"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h3 id="panelTitle">District Overview</h3>
-          <p id="breadcrumb">Assam</p>
+    <!-- DRILL DOWN -->
+    <section id="view-drilldown" class="view">
+      <section class="panel">
+        <div class="panel-head">
+          <div><h3>Drill-down Explorer</h3><p>District → Block → Cluster → School</p></div>
+          <div class="breadcrumb-btns">
+            <button id="clearDrill" class="secondary-btn">Reset</button>
+          </div>
         </div>
-        <input id="search" type="search" placeholder="Search district...">
-      </div>
-      <div id="loader" class="loader hidden">Loading live data…</div>
-      <div class="table-wrap">
-        <table>
-          <thead id="thead"></thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
+        <div class="filters">
+          <div class="field"><label>District</label><select id="drillDistrict"><option value="">Select district</option></select></div>
+          <div class="field"><label>Block</label><select id="drillBlock" disabled><option value="">Select block</option></select></div>
+          <div class="field"><label>Cluster</label><select id="drillCluster" disabled><option value="">Select cluster</option></select></div>
+        </div>
+        <div class="hint" id="drillHint">Select a district to see its blocks.</div>
+      </section>
+
+      <section class="stats">
+        <div class="stat"><span>Current Level</span><strong id="dLevel">Assam</strong><div class="sub" id="dName">Choose a district</div></div>
+        <div class="stat"><span>Total Schools</span><strong id="dTotal">—</strong></div>
+        <div class="stat danger"><span>Daily Pending</span><strong id="dPending">—</strong></div>
+        <div class="stat"><span>Meals Served</span><strong id="dMeals">—</strong></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div><h3 id="drillTableTitle">Districts</h3><p id="drillBreadcrumb">Assam</p></div>
+          <input id="drillSearch" class="search" type="search" placeholder="Search...">
+        </div>
+        <div class="table-wrap">
+          <table><thead id="drillHead"></thead><tbody id="drillBody"></tbody></table>
+        </div>
+      </section>
+    </section>
+
+    <!-- MEALS SERVED ANALYTICS -->
+    <section id="view-meals" class="view">
+      <section class="panel">
+        <div class="panel-head">
+          <div><h3>Meals Served Analysis</h3><p>Compare Assam → District → Block → Cluster live meal counts.</p></div>
+          <button id="resetMeals" class="secondary-btn">Reset</button>
+        </div>
+        <div class="filters">
+          <div class="field"><label>District</label><select id="mealDistrict"><option value="">All Assam</option></select></div>
+          <div class="field"><label>Block</label><select id="mealBlock" disabled><option value="">All blocks</option></select></div>
+          <div class="field"><label>Cluster</label><select id="mealCluster" disabled><option value="">All clusters</option></select></div>
+        </div>
+      </section>
+
+      <section class="meal-grid">
+        <div class="meal-card"><div class="scope">Assam</div><div class="name">Entire State</div><div class="value" id="mAssam">—</div><div class="share">Total meals served today</div></div>
+        <div class="meal-card"><div class="scope">District</div><div class="name" id="mDistrictName">Select district</div><div class="value" id="mDistrict">—</div><div class="share" id="mDistrictShare">Share of Assam: —</div></div>
+        <div class="meal-card"><div class="scope">Block</div><div class="name" id="mBlockName">Select block</div><div class="value" id="mBlock">—</div><div class="share" id="mBlockShare">Share of district: —</div></div>
+        <div class="meal-card"><div class="scope">Cluster</div><div class="name" id="mClusterName">Select cluster</div><div class="value" id="mCluster">—</div><div class="share" id="mClusterShare">Share of block: —</div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div><h3 id="mealRankTitle">District-wise Meals Served</h3><p id="mealRankSub">Assam total distribution by district</p></div>
+          <input id="mealSearch" class="search" type="search" placeholder="Search...">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Rank</th><th id="mealScopeHead">District</th><th>Meals Served</th><th>Share</th><th>Distribution</th></tr></thead>
+            <tbody id="mealBody"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
   </main>
 </div>
-<script>
 
+<script>
 const $ = s => document.querySelector(s);
-let currentRows = [];
-let currentLevel = "district";
-let context = {};
+const $$ = s => [...document.querySelectorAll(s)];
+
+let activeView = "overview";
+let districtsCache = null;
+const blocksCache = new Map();
+const clustersCache = new Map();
+const schoolsCache = new Map();
 
 function fmt(n){ return Number(n||0).toLocaleString("en-IN"); }
-function setLoading(v){ $("#loader").classList.toggle("hidden", !v); }
-function setUpdated(){ $("#lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString(); }
+function pct(part,total){ return total ? ((Number(part||0)/Number(total))*100).toFixed(2)+"%" : "0.00%"; }
+function showError(msg=""){
+  const box=$("#errorBox");
+  box.textContent=msg;
+  box.style.display=msg?"block":"none";
+}
+function setLoading(v){ $("#globalLoader").classList.toggle("hidden", !v); }
+function setUpdated(){ $("#lastUpdated").textContent="Updated "+new Date().toLocaleTimeString(); }
 
 async function api(url){
-  setLoading(true);
+  setLoading(true); showError("");
   try{
-    const r = await fetch(url, {headers: {"Accept": "application/json"}});
-    const text = await r.text();
+    const r=await fetch(url,{headers:{Accept:"application/json"}});
+    const text=await r.text();
     let j;
-    try {
-      j = JSON.parse(text);
-    } catch (_) {
-      throw new Error(`Backend returned HTTP ${r.status} instead of JSON.`);
-    }
+    try{ j=JSON.parse(text); }catch(_){ throw new Error(`Backend returned HTTP ${r.status} instead of JSON.`); }
     if(!r.ok || !j.ok) throw new Error(j.error || `Request failed (${r.status})`);
     return j.data;
   } finally { setLoading(false); }
 }
-
-function stats(rows){
-  $("#sTotal").textContent = fmt(rows.reduce((a,r)=>a+(r.totalSchools||0),0));
-  $("#sReported").textContent = fmt(rows.reduce((a,r)=>a+(r.dailyReported||0),0));
-  $("#sPending").textContent = fmt(rows.reduce((a,r)=>a+(r.dailyNotReported||0),0));
-  $("#sMeals").textContent = fmt(rows.reduce((a,r)=>a+(r.mealsServed||0),0));
+async function getDistricts(force=false){
+  if(!force && districtsCache) return districtsCache;
+  districtsCache=await api("/api/districts");
+  return districtsCache;
+}
+async function getBlocks(districtCode,force=false){
+  if(!force && blocksCache.has(districtCode)) return blocksCache.get(districtCode);
+  const rows=await api(`/api/blocks?districtCode=${encodeURIComponent(districtCode)}`);
+  blocksCache.set(districtCode,rows); return rows;
+}
+async function getClusters(districtCode,blockCode,force=false){
+  const key=`${districtCode}|${blockCode}`;
+  if(!force && clustersCache.has(key)) return clustersCache.get(key);
+  const rows=await api(`/api/clusters?districtCode=${encodeURIComponent(districtCode)}&blockCode=${encodeURIComponent(blockCode)}`);
+  clustersCache.set(key,rows); return rows;
+}
+async function getSchools(districtCode,blockCode,clusterCode,force=false){
+  const key=`${districtCode}|${blockCode}|${clusterCode}`;
+  if(!force && schoolsCache.has(key)) return schoolsCache.get(key);
+  const rows=await api(`/api/schools?districtCode=${encodeURIComponent(districtCode)}&blockCode=${encodeURIComponent(blockCode)}&clusterCode=${encodeURIComponent(clusterCode)}`);
+  schoolsCache.set(key,rows); return rows;
+}
+function clearCaches(){
+  districtsCache=null; blocksCache.clear(); clustersCache.clear(); schoolsCache.clear();
 }
 
-function renderDistricts(rows){
-  currentLevel="district"; currentRows=rows;
-  $("#panelTitle").textContent="District Overview"; $("#breadcrumb").textContent="Assam";
-  $("#search").placeholder="Search district...";
-  $("#thead").innerHTML=`<tr><th>District</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>`;
-  $("#tbody").innerHTML=rows.map(r=>`<tr>
-    <td><a class="link" data-district="${r.districtCode}" data-name="${r.district}">${r.district}</a></td>
-    <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
-    <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
-  </tr>`).join("");
-  stats(rows);
+function setView(view){
+  activeView=view;
+  $$(".view").forEach(v=>v.classList.remove("active"));
+  $(`#view-${view}`).classList.add("active");
+  $$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
+  showError("");
+  if(view==="overview") loadOverview();
+  if(view==="drilldown") initDrilldown();
+  if(view==="meals") initMeals();
 }
 
-function renderBlocks(rows){
-  currentLevel="block"; currentRows=rows;
-  $("#panelTitle").textContent=`Blocks — ${context.districtName}`; $("#breadcrumb").textContent=`Assam / ${context.districtName}`;
-  $("#search").placeholder="Search block...";
-  $("#thead").innerHTML=`<tr><th>Block</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>`;
-  $("#tbody").innerHTML=rows.map(r=>`<tr>
-    <td><a class="link" data-block="${r.blockCode}" data-name="${r.block}">${r.block}</a></td>
-    <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
-    <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
-  </tr>`).join("");
-  stats(rows);
+function fillSelect(el,rows,valueKey,nameKey,placeholder){
+  const selected=el.value;
+  el.innerHTML=`<option value="">${placeholder}</option>`+rows.map(r=>`<option value="${r[valueKey]}">${r[nameKey]}</option>`).join("");
+  if(rows.some(r=>String(r[valueKey])===String(selected))) el.value=selected;
 }
 
-function renderClusters(rows){
-  currentLevel="cluster"; currentRows=rows;
-  $("#panelTitle").textContent=`Clusters — ${context.blockName}`; $("#breadcrumb").textContent=`Assam / ${context.districtName} / ${context.blockName}`;
-  $("#search").placeholder="Search cluster...";
-  $("#thead").innerHTML=`<tr><th>Cluster</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>`;
-  $("#tbody").innerHTML=rows.map(r=>`<tr>
-    <td><a class="link" data-cluster="${r.clusterCode}" data-name="${r.cluster}">${r.cluster}</a></td>
-    <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
-    <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
-  </tr>`).join("");
-  stats(rows);
+/* OVERVIEW */
+async function loadOverview(force=false){
+  try{
+    const rows=await getDistricts(force);
+    $("#overviewBody").innerHTML=rows.map(r=>`<tr>
+      <td><a class="link district-open" data-code="${r.districtCode}" data-name="${r.district}">${r.district}</a></td>
+      <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
+      <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
+    </tr>`).join("");
+    $("#oTotal").textContent=fmt(rows.reduce((a,r)=>a+r.totalSchools,0));
+    $("#oReported").textContent=fmt(rows.reduce((a,r)=>a+r.dailyReported,0));
+    $("#oPending").textContent=fmt(rows.reduce((a,r)=>a+r.dailyNotReported,0));
+    $("#oMeals").textContent=fmt(rows.reduce((a,r)=>a+r.mealsServed,0));
+    setUpdated();
+  }catch(e){showError(e.message);}
 }
-
-function renderSchools(rows){
-  currentLevel="school"; currentRows=rows;
-  $("#panelTitle").textContent=`Schools — ${context.clusterName}`;
-  $("#breadcrumb").textContent=`Assam / ${context.districtName} / ${context.blockName} / ${context.clusterName}`;
-  $("#search").placeholder="Search school...";
-  $("#thead").innerHTML=`<tr><th>School</th><th>School Code</th><th>Shift</th><th>Monthly Status</th><th>Enrolled</th><th>Daily Status</th><th>Meals Served</th></tr>`;
-  $("#tbody").innerHTML=rows.map(r=>`<tr>
-    <td>${r.school}</td><td>${r.schoolCode}</td><td>${r.shift}</td>
-    <td class="${r.monthlyStatus==='Yes'?'good':'bad'}">${r.monthlyStatus}</td>
-    <td>${fmt(r.enrolled)}</td><td class="${r.dailyStatus==='Yes'?'good':'bad'}">${r.dailyStatus}</td><td>${fmt(r.mealsServed)}</td>
-  </tr>`).join("");
-  $("#sTotal").textContent=fmt(rows.length);
-  $("#sReported").textContent=fmt(rows.filter(r=>r.dailyStatus==="Yes").length);
-  $("#sPending").textContent=fmt(rows.filter(r=>r.dailyStatus!=="Yes").length);
-  $("#sMeals").textContent=fmt(rows.reduce((a,r)=>a+(r.mealsServed||0),0));
-}
-
-async function loadDistricts(){ const rows=await api("/api/districts"); renderDistricts(rows); setUpdated(); }
-async function loadBlocks(code,name){ context={districtCode:code,districtName:name}; renderBlocks(await api(`/api/blocks?districtCode=${encodeURIComponent(code)}`)); setUpdated(); }
-async function loadClusters(code,name){ context.blockCode=code;context.blockName=name;renderClusters(await api(`/api/clusters?districtCode=${context.districtCode}&blockCode=${encodeURIComponent(code)}`));setUpdated(); }
-async function loadSchools(code,name){ context.clusterCode=code;context.clusterName=name;renderSchools(await api(`/api/schools?districtCode=${context.districtCode}&blockCode=${context.blockCode}&clusterCode=${encodeURIComponent(code)}`));setUpdated(); }
-
-$("#tbody").addEventListener("click", e=>{
-  const a=e.target.closest("a.link"); if(!a) return;
-  if(a.dataset.district) loadBlocks(a.dataset.district,a.dataset.name);
-  else if(a.dataset.block) loadClusters(a.dataset.block,a.dataset.name);
-  else if(a.dataset.cluster) loadSchools(a.dataset.cluster,a.dataset.name);
+$("#overviewBody").addEventListener("click",async e=>{
+  const a=e.target.closest(".district-open"); if(!a) return;
+  setView("drilldown");
+  await prepareDrillDistrict(a.dataset.code);
 });
 
-$("#refreshBtn").addEventListener("click", ()=>{
-  if(currentLevel==="district") loadDistricts();
-  else if(currentLevel==="block") loadBlocks(context.districtCode,context.districtName);
-  else if(currentLevel==="cluster") loadClusters(context.blockCode,context.blockName);
-  else if(currentLevel==="school") loadSchools(context.clusterCode,context.clusterName);
-});
-
-$("#search").addEventListener("input", e=>{
-  const q=e.target.value.toLowerCase();
-  for(const tr of $("#tbody").rows){
-    tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";
+/* DRILLDOWN */
+async function initDrilldown(){
+  try{
+    const districts=await getDistricts();
+    fillSelect($("#drillDistrict"),districts,"districtCode","district","Select district");
+    if(!$("#drillDistrict").value){
+      renderDrillDistricts(districts);
+    }
+  }catch(e){showError(e.message);}
+}
+function drillStats(level,name,total,pending,meals){
+  $("#dLevel").textContent=level; $("#dName").textContent=name||"";
+  $("#dTotal").textContent=fmt(total); $("#dPending").textContent=fmt(pending); $("#dMeals").textContent=fmt(meals);
+}
+function renderDrillDistricts(rows){
+  $("#drillTableTitle").textContent="Districts"; $("#drillBreadcrumb").textContent="Assam";
+  $("#drillHead").innerHTML="<tr><th>District</th><th>Total Schools</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>";
+  $("#drillBody").innerHTML=rows.map(r=>`<tr><td><a class="link dd-district" data-code="${r.districtCode}">${r.district}</a></td><td>${fmt(r.totalSchools)}</td><td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
+  drillStats("Assam","All districts",rows.reduce((a,r)=>a+r.totalSchools,0),rows.reduce((a,r)=>a+r.dailyNotReported,0),rows.reduce((a,r)=>a+r.mealsServed,0));
+  $("#drillHint").textContent="Select a district to see its blocks.";
+}
+function renderDrillBlocks(rows,district){
+  $("#drillTableTitle").textContent=`Blocks — ${district.district}`; $("#drillBreadcrumb").textContent=`Assam / ${district.district}`;
+  $("#drillHead").innerHTML="<tr><th>Block</th><th>Total Schools</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>";
+  $("#drillBody").innerHTML=rows.map(r=>`<tr><td><a class="link dd-block" data-code="${r.blockCode}">${r.block}</a></td><td>${fmt(r.totalSchools)}</td><td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
+  drillStats("District",district.district,district.totalSchools,district.dailyNotReported,district.mealsServed);
+  $("#drillHint").textContent="Now select a block to see its clusters.";
+}
+function renderDrillClusters(rows,district,block){
+  $("#drillTableTitle").textContent=`Clusters — ${block.block}`; $("#drillBreadcrumb").textContent=`Assam / ${district.district} / ${block.block}`;
+  $("#drillHead").innerHTML="<tr><th>Cluster</th><th>Total Schools</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>";
+  $("#drillBody").innerHTML=rows.map(r=>`<tr><td><a class="link dd-cluster" data-code="${r.clusterCode}">${r.cluster}</a></td><td>${fmt(r.totalSchools)}</td><td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
+  drillStats("Block",block.block,block.totalSchools,block.dailyNotReported,block.mealsServed);
+  $("#drillHint").textContent="Select a cluster to see all schools inside it.";
+}
+function renderDrillSchools(rows,district,block,cluster){
+  $("#drillTableTitle").textContent=`Schools — ${cluster.cluster}`; $("#drillBreadcrumb").textContent=`Assam / ${district.district} / ${block.block} / ${cluster.cluster}`;
+  $("#drillHead").innerHTML="<tr><th>School</th><th>School Code</th><th>Shift</th><th>Daily Status</th><th>Meals Served</th></tr>";
+  $("#drillBody").innerHTML=rows.map(r=>`<tr><td>${r.school}</td><td>${r.schoolCode}</td><td>${r.shift}</td><td class="${r.dailyStatus==="Yes"?"good":"bad"}">${r.dailyStatus}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
+  drillStats("Cluster",cluster.cluster,cluster.totalSchools,cluster.dailyNotReported,cluster.mealsServed);
+  $("#drillHint").textContent=`Showing ${rows.length} schools in ${cluster.cluster}.`;
+}
+async function prepareDrillDistrict(code){
+  const districts=await getDistricts();
+  $("#drillDistrict").value=code;
+  const district=districts.find(r=>String(r.districtCode)===String(code)); if(!district) return;
+  const blocks=await getBlocks(code);
+  fillSelect($("#drillBlock"),blocks,"blockCode","block","Select block");
+  $("#drillBlock").disabled=false;
+  $("#drillCluster").innerHTML='<option value="">Select cluster</option>'; $("#drillCluster").disabled=true;
+  renderDrillBlocks(blocks,district);
+}
+async function prepareDrillBlock(code){
+  const dCode=$("#drillDistrict").value; if(!dCode) return;
+  const districts=await getDistricts(); const district=districts.find(r=>String(r.districtCode)===String(dCode));
+  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(code)); if(!block) return;
+  $("#drillBlock").value=code;
+  const clusters=await getClusters(dCode,code);
+  fillSelect($("#drillCluster"),clusters,"clusterCode","cluster","Select cluster"); $("#drillCluster").disabled=false;
+  renderDrillClusters(clusters,district,block);
+}
+async function prepareDrillCluster(code){
+  const dCode=$("#drillDistrict").value,bCode=$("#drillBlock").value; if(!dCode||!bCode) return;
+  const districts=await getDistricts(); const district=districts.find(r=>String(r.districtCode)===String(dCode));
+  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(bCode));
+  const clusters=await getClusters(dCode,bCode); const cluster=clusters.find(r=>String(r.clusterCode)===String(code)); if(!cluster) return;
+  $("#drillCluster").value=code;
+  const schools=await getSchools(dCode,bCode,code);
+  renderDrillSchools(schools,district,block,cluster);
+}
+$("#drillDistrict").addEventListener("change",async e=>{
+  if(!e.target.value){
+    $("#drillBlock").disabled=true; $("#drillCluster").disabled=true;
+    $("#drillBlock").innerHTML='<option value="">Select block</option>'; $("#drillCluster").innerHTML='<option value="">Select cluster</option>';
+    renderDrillDistricts(await getDistricts()); return;
   }
+  try{await prepareDrillDistrict(e.target.value);}catch(err){showError(err.message);}
+});
+$("#drillBlock").addEventListener("change",async e=>{
+  if(!e.target.value){await prepareDrillDistrict($("#drillDistrict").value);return;}
+  try{await prepareDrillBlock(e.target.value);}catch(err){showError(err.message);}
+});
+$("#drillCluster").addEventListener("change",async e=>{
+  if(!e.target.value){await prepareDrillBlock($("#drillBlock").value);return;}
+  try{await prepareDrillCluster(e.target.value);}catch(err){showError(err.message);}
+});
+$("#drillBody").addEventListener("click",async e=>{
+  try{
+    const d=e.target.closest(".dd-district"); if(d){$("#drillDistrict").value=d.dataset.code;await prepareDrillDistrict(d.dataset.code);return;}
+    const b=e.target.closest(".dd-block"); if(b){$("#drillBlock").value=b.dataset.code;await prepareDrillBlock(b.dataset.code);return;}
+    const c=e.target.closest(".dd-cluster"); if(c){$("#drillCluster").value=c.dataset.code;await prepareDrillCluster(c.dataset.code);}
+  }catch(err){showError(err.message);}
+});
+$("#clearDrill").addEventListener("click",async()=>{
+  $("#drillDistrict").value="";$("#drillBlock").disabled=true;$("#drillCluster").disabled=true;
+  $("#drillBlock").innerHTML='<option value="">Select block</option>';$("#drillCluster").innerHTML='<option value="">Select cluster</option>';
+  renderDrillDistricts(await getDistricts());
 });
 
-loadDistricts().catch(err=>alert(err.message));
+/* MEALS ANALYTICS */
+function mealCards({assam=0,district=null,block=null,cluster=null}){
+  $("#mAssam").textContent=fmt(assam);
+  $("#mDistrictName").textContent=district?.district||"Select district";
+  $("#mDistrict").textContent=district?fmt(district.mealsServed):"—";
+  $("#mDistrictShare").textContent=district?`Share of Assam: ${pct(district.mealsServed,assam)}`:"Share of Assam: —";
+  $("#mBlockName").textContent=block?.block||"Select block";
+  $("#mBlock").textContent=block?fmt(block.mealsServed):"—";
+  $("#mBlockShare").textContent=block&&district?`Share of district: ${pct(block.mealsServed,district.mealsServed)}`:"Share of district: —";
+  $("#mClusterName").textContent=cluster?.cluster||"Select cluster";
+  $("#mCluster").textContent=cluster?fmt(cluster.mealsServed):"—";
+  $("#mClusterShare").textContent=cluster&&block?`Share of block: ${pct(cluster.mealsServed,block.mealsServed)}`:"Share of block: —";
+}
+function renderMealRanking(rows,nameKey,title,sub,total){
+  const sorted=[...rows].sort((a,b)=>(b.mealsServed||0)-(a.mealsServed||0));
+  $("#mealRankTitle").textContent=title; $("#mealRankSub").textContent=sub; $("#mealScopeHead").textContent=nameKey[0].toUpperCase()+nameKey.slice(1);
+  const max=Math.max(1,...sorted.map(r=>Number(r.mealsServed||0)));
+  $("#mealBody").innerHTML=sorted.map((r,i)=>{
+    const share=pct(r.mealsServed,total);
+    const width=Math.max(1,(Number(r.mealsServed||0)/max)*100);
+    return `<tr><td>${i+1}</td><td><div class="rank-cell"><span class="rank-num">#${i+1}</span><strong>${r[nameKey]}</strong></div></td><td>${fmt(r.mealsServed)}</td><td>${share}</td><td><div class="bar"><span style="width:${width}%"></span></div></td></tr>`;
+  }).join("");
+}
+async function initMeals(){
+  try{
+    const districts=await getDistricts();
+    fillSelect($("#mealDistrict"),districts,"districtCode","district","All Assam");
+    const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
+    if(!$("#mealDistrict").value){
+      $("#mealBlock").disabled=true; $("#mealCluster").disabled=true;
+      mealCards({assam});
+      renderMealRanking(districts,"district","District-wise Meals Served","Assam total distribution by district",assam);
+    }
+  }catch(e){showError(e.message);}
+}
+async function mealDistrictChanged(code){
+  const districts=await getDistricts(); const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
+  if(!code){
+    $("#mealBlock").disabled=true;$("#mealCluster").disabled=true;
+    $("#mealBlock").innerHTML='<option value="">All blocks</option>';$("#mealCluster").innerHTML='<option value="">All clusters</option>';
+    mealCards({assam});renderMealRanking(districts,"district","District-wise Meals Served","Assam total distribution by district",assam);return;
+  }
+  const district=districts.find(r=>String(r.districtCode)===String(code));
+  const blocks=await getBlocks(code);
+  fillSelect($("#mealBlock"),blocks,"blockCode","block","All blocks");$("#mealBlock").disabled=false;
+  $("#mealCluster").innerHTML='<option value="">All clusters</option>';$("#mealCluster").disabled=true;
+  mealCards({assam,district});
+  renderMealRanking(blocks,"block",`Block-wise Meals Served — ${district.district}`,`District total: ${fmt(district.mealsServed)} meals`,district.mealsServed);
+}
+async function mealBlockChanged(code){
+  const dCode=$("#mealDistrict").value; if(!dCode) return;
+  const districts=await getDistricts(); const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
+  const district=districts.find(r=>String(r.districtCode)===String(dCode));
+  if(!code){await mealDistrictChanged(dCode);return;}
+  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(code));
+  const clusters=await getClusters(dCode,code);
+  fillSelect($("#mealCluster"),clusters,"clusterCode","cluster","All clusters");$("#mealCluster").disabled=false;
+  mealCards({assam,district,block});
+  renderMealRanking(clusters,"cluster",`Cluster-wise Meals Served — ${block.block}`,`Block total: ${fmt(block.mealsServed)} meals`,block.mealsServed);
+}
+async function mealClusterChanged(code){
+  const dCode=$("#mealDistrict").value,bCode=$("#mealBlock").value; if(!dCode||!bCode) return;
+  const districts=await getDistricts(); const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
+  const district=districts.find(r=>String(r.districtCode)===String(dCode));
+  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(bCode));
+  if(!code){await mealBlockChanged(bCode);return;}
+  const clusters=await getClusters(dCode,bCode); const cluster=clusters.find(r=>String(r.clusterCode)===String(code));
+  mealCards({assam,district,block,cluster});
+  const schools=await getSchools(dCode,bCode,code);
+  renderMealRanking(schools,"school",`School-wise Meals Served — ${cluster.cluster}`,`Cluster total: ${fmt(cluster.mealsServed)} meals`,cluster.mealsServed);
+}
+$("#mealDistrict").addEventListener("change",async e=>{try{await mealDistrictChanged(e.target.value);}catch(err){showError(err.message);}});
+$("#mealBlock").addEventListener("change",async e=>{try{await mealBlockChanged(e.target.value);}catch(err){showError(err.message);}});
+$("#mealCluster").addEventListener("change",async e=>{try{await mealClusterChanged(e.target.value);}catch(err){showError(err.message);}});
+$("#resetMeals").addEventListener("click",async()=>{
+  $("#mealDistrict").value="";$("#mealBlock").value="";$("#mealCluster").value="";
+  await mealDistrictChanged("");
+});
 
+/* SEARCH */
+function hookSearch(inputSelector,tbodySelector){
+  $(inputSelector).addEventListener("input",e=>{
+    const q=e.target.value.toLowerCase();
+    for(const tr of $(tbodySelector).rows) tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";
+  });
+}
+hookSearch("#overviewSearch","#overviewBody");
+hookSearch("#drillSearch","#drillBody");
+hookSearch("#mealSearch","#mealBody");
+
+/* NAV + REFRESH */
+$$(".nav-item").forEach(btn=>btn.addEventListener("click",()=>setView(btn.dataset.view)));
+$("#refreshBtn").addEventListener("click",async()=>{
+  try{
+    clearCaches();
+    if(activeView==="overview") await loadOverview(true);
+    else if(activeView==="drilldown"){
+      const d=$("#drillDistrict").value,b=$("#drillBlock").value,c=$("#drillCluster").value;
+      await initDrilldown();
+      if(d){await prepareDrillDistrict(d);if(b){await prepareDrillBlock(b);if(c)await prepareDrillCluster(c);}}
+      setUpdated();
+    } else {
+      const d=$("#mealDistrict").value,b=$("#mealBlock").value,c=$("#mealCluster").value;
+      await initMeals();
+      if(d){$("#mealDistrict").value=d;await mealDistrictChanged(d);if(b){$("#mealBlock").value=b;await mealBlockChanged(b);if(c){$("#mealCluster").value=c;await mealClusterChanged(c);}}}
+      setUpdated();
+    }
+  }catch(e){showError(e.message);}
+});
+
+/* INITIAL */
+loadOverview();
 </script>
 </body>
 </html>

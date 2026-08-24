@@ -22,6 +22,12 @@ def get_html(path, params):
 def clean_cells(row):
     return [c.get_text(" ", strip=True) for c in row.find_all("td")]
 
+def to_int(value):
+    try:
+        return int(str(value).replace(",", "").strip() or "0")
+    except (ValueError, TypeError):
+        return 0
+
 def parse_districts():
     html = get_html("GetDisttWiseSummaryHome", {"stateCode": STATE_CODE})
     soup = BeautifulSoup(html, "html.parser")
@@ -39,13 +45,13 @@ def parse_districts():
         out.append({
             "district": cells[1],
             "districtCode": m.group(2),
-            "totalSchools": int(cells[2] or 0),
-            "monthlyReported": int(cells[3] or 0),
-            "monthlyNotReported": int(cells[4] or 0),
-            "enrolled": int(cells[5] or 0),
-            "dailyReported": int(cells[6] or 0),
-            "dailyNotReported": int(cells[7] or 0),
-            "mealsServed": int(cells[8] or 0),
+            "totalSchools": to_int(cells[2]),
+            "monthlyReported": to_int(cells[3]),
+            "monthlyNotReported": to_int(cells[4]),
+            "enrolled": to_int(cells[5]),
+            "dailyReported": to_int(cells[6]),
+            "dailyNotReported": to_int(cells[7]),
+            "mealsServed": to_int(cells[8]),
         })
     return out
 
@@ -69,13 +75,13 @@ def parse_blocks(district_code):
         out.append({
             "block": cells[1],
             "blockCode": codes[2],
-            "totalSchools": int(cells[2] or 0),
-            "monthlyReported": int(cells[3] or 0),
-            "monthlyNotReported": int(cells[4] or 0),
-            "enrolled": int(cells[5] or 0),
-            "dailyReported": int(cells[6] or 0),
-            "dailyNotReported": int(cells[7] or 0),
-            "mealsServed": int(cells[8] or 0),
+            "totalSchools": to_int(cells[2]),
+            "monthlyReported": to_int(cells[3]),
+            "monthlyNotReported": to_int(cells[4]),
+            "enrolled": to_int(cells[5]),
+            "dailyReported": to_int(cells[6]),
+            "dailyNotReported": to_int(cells[7]),
+            "mealsServed": to_int(cells[8]),
         })
     return out
 
@@ -98,13 +104,13 @@ def parse_clusters(district_code, block_code):
         out.append({
             "cluster": cells[1],
             "clusterCode": codes[3],
-            "totalSchools": int(cells[2] or 0),
-            "monthlyReported": int(cells[3] or 0),
-            "monthlyNotReported": int(cells[4] or 0),
-            "enrolled": int(cells[5] or 0),
-            "dailyReported": int(cells[6] or 0),
-            "dailyNotReported": int(cells[7] or 0),
-            "mealsServed": int(cells[8] or 0),
+            "totalSchools": to_int(cells[2]),
+            "monthlyReported": to_int(cells[3]),
+            "monthlyNotReported": to_int(cells[4]),
+            "enrolled": to_int(cells[5]),
+            "dailyReported": to_int(cells[6]),
+            "dailyNotReported": to_int(cells[7]),
+            "mealsServed": to_int(cells[8]),
         })
     return out
 
@@ -132,9 +138,9 @@ def parse_schools(district_code, block_code, cluster_code):
             "schoolCode": codes[1],
             "shift": cells[2],
             "monthlyStatus": cells[3],
-            "enrolled": int(cells[4] or 0),
+            "enrolled": to_int(cells[4]),
             "dailyStatus": cells[5],
-            "mealsServed": int(cells[6] or 0),
+            "mealsServed": to_int(cells[6]),
         })
     return out
 

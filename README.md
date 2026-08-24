@@ -1,15 +1,23 @@
-# Assam MDM Dashboard V2
+# Assam MDM Dashboard V3
 
-This version fixes `TemplateNotFound: index.html`.
+New in V3:
+- Working sidebar Drill-down button.
+- Drill-down Explorer: District → Block → Cluster → School.
+- Separate Meals Served analytics view.
+- Assam total meals.
+- District meals + share of Assam.
+- Block meals + share of district.
+- Cluster meals + share of block.
+- Ranking tables and distribution bars.
+- Client-side caching to reduce repeated requests.
 
-The frontend is now a single `index.html` file in the repository root, and Flask serves it directly.
-No `templates/` or `static/` folders are required.
-
-Upload these files to the ROOT of your GitHub repository:
+## Deploy
+Replace these files in the GitHub repository root and commit to `main`:
 - app.py
 - index.html
 - requirements.txt
 - render.yaml
 - Procfile
+- .gitignore
 
-Then commit to `main`. Render should auto-deploy.
+Render should auto-deploy from GitHub.

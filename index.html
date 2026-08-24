@@ -56,7 +56,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics, Tracker & Public Previous Reports</p></div></div>
+ <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics, Verified History & Tracker</p></div></div>
  <nav>
   <button class="navbtn active" data-view="executive">Executive Dashboard</button>
   <button class="navbtn" data-view="drill">Drill-down</button>
@@ -151,9 +151,9 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
   <div class="field"><label>Block filter</label><select id="histBlock" disabled><option value="">All blocks</option></select></div>
  </div><div class="pbody"><div class="simple-note">District history now uses the public official date-wise report, so 3–7 day district analysis works immediately and skips all-zero non-reporting days. Block and cluster history still uses stored tracker snapshots; school history uses daily school-gap captures.</div></div></section>
  <div class="history-cards">
-  <div class="card"><span>Tracked Days Available</span><strong id="hDays">—</strong><small id="hDates">—</small></div>
+  <div class="card"><span>Days Observed Available</span><strong id="hDays">—</strong><small id="hDates">—</small></div>
   <div class="card"><span>Entities Needing Follow-up</span><strong class="red" id="hCount">—</strong></div>
-  <div class="card"><span>Repeat Problems</span><strong class="amber" id="hRepeat">—</strong><small>Incomplete on 2+ tracked days</small></div>
+  <div class="card"><span>Repeat Problems</span><strong class="amber" id="hRepeat">—</strong><small>Incomplete on 2+ available days</small></div>
   <div class="card"><span>Latest School Gap Capture</span><strong id="hSchoolRun">—</strong><small id="hSchoolRunSub">Daily capture builds school history</small></div>
  </div>
  <section class="panel"><div class="phead"><div><h3 id="histTitle">Poor-performing Districts</h3><p id="histSub">Ranked by repeated incomplete reporting, then average reporting completion.</p></div><div class="download-row"><input id="histSearch" class="search" placeholder="Search..."><a id="histDownload" class="btn primary download" href="/api/report/poor.csv?days=7&level=district">Download Simple CSV</a></div></div><div class="tablewrap"><table><thead id="histHead"></thead><tbody id="histBody"></tbody></table></div></section>
@@ -197,12 +197,12 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
  <section class="panel">
   <div class="phead">
    <div><h3 id="prevTrendTitle">Official 3–7 Day Trend</h3><p id="prevTrendSub">Open a district, block or cluster to compare the same entity across previous report dates.</p></div>
-   <button id="prevTrendLoad" class="btn soft" disabled>Load Trend</button>
+   <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="prevTrendLoad" class="btn soft" disabled>Load Trend</button><button id="prevTrendRefresh" class="btn soft" disabled>Refresh Official Data</button></div>
   </div>
   <div class="pbody">
    <div id="prevTrendSummary" class="prev-trend-grid"><div class="empty">Select a district, block or cluster first.</div></div>
   </div>
-  <div class="tablewrap"><table><thead><tr><th>Date</th><th>Daily Reporting %</th><th>Reported</th><th>Pending</th><th>Meals Served</th><th>Source</th></tr></thead><tbody id="prevTrendBody"><tr><td colspan="6" class="empty">No trend loaded.</td></tr></tbody></table></div>
+  <div class="tablewrap"><table><thead><tr><th>Date</th><th>Total Schools</th><th>Daily Reporting %</th><th>Reported</th><th>Pending</th><th>Meals Served</th><th>Source</th></tr></thead><tbody id="prevTrendBody"><tr><td colspan="7" class="empty">No trend loaded.</td></tr></tbody></table></div>
  </section>
 </section>
 
@@ -220,14 +220,14 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
   <div class="report-actions"><a class="btn primary download" href="/api/report/daily.csv">Download Today's District Report</a><button id="reportSnapshot" class="btn soft">Open 30m Tracker</button></div>
   <div class="simple-note" style="margin-top:15px">Today's report uses simple labels such as “Schools Reported Today”, “Schools Still Pending”, “Daily Reporting %”, “Meals Served Today”, and “Average Meals per Reporting School”. The ambiguous enrollment percentage column has been removed from the basic report.</div>
  </div></section>
- <section class="panel"><div class="phead"><div><h3>3–7 Day Follow-up Reports</h3><p>Download poor-performance lists directly from the history tracker.</p></div></div><div class="pbody"><div class="download-row">
+ <section class="panel"><div class="phead"><div><h3>3–7 Day Follow-up Reports</h3><p>Download simple follow-up lists with the correct District, Block, Cluster and School columns.</p></div></div><div class="pbody"><div class="download-row">
   <a class="btn soft download" href="/api/report/poor.csv?days=3&level=district">3-Day District Follow-up</a>
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=district">7-Day District Follow-up</a>
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=block">7-Day Block Follow-up</a>
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=cluster">7-Day Cluster Follow-up</a>
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=school">7-Day School Follow-up</a>
  </div><p class="history-note">Historical reports become more useful as tracker days accumulate. School history starts from the first daily school-gap capture after this version is deployed.</p></div></section>
- <section class="panel"><div class="phead"><div><h3>How “Poor Performance” Is Flagged</h3><p>Simple, transparent dashboard rules — not official policy cut-offs.</p></div></div><div class="pbody"><div class="grid3"><div class="mini"><span>High attention</span><strong>Repeated incomplete reporting</strong></div><div class="mini"><span>Needs follow-up</span><strong>Incomplete on multiple days</strong></div><div class="mini"><span>One-day gap</span><strong>Watch, but not repeated yet</strong></div></div><p class="history-note">For districts, blocks and clusters, ranking focuses on days with pending schools, average reporting %, worst reporting %, and pending counts. For schools, ranking focuses on how many tracked days the school remained not reported.</p></div></section>
+ <section class="panel"><div class="phead"><div><h3>How “Poor Performance” Is Flagged</h3><p>Simple, transparent dashboard rules — not official policy cut-offs.</p></div></div><div class="pbody"><div class="grid3"><div class="mini"><span>High attention</span><strong>Repeated incomplete reporting</strong></div><div class="mini"><span>Needs follow-up</span><strong>Incomplete on multiple days</strong></div><div class="mini"><span>One-day gap</span><strong>Watch, but not repeated yet</strong></div></div><p class="history-note">For districts, blocks and clusters, ranking focuses on days with pending schools, average reporting %, worst reporting %, and pending counts. For schools, ranking focuses on how many available days the school remained not reported.</p></div></section>
 </section>
 </main></div>
 <script>
@@ -363,7 +363,7 @@ function prevRenderSummary(data){
  if(!rows.length)$('#prevBody').innerHTML='<tr><td colspan="7" class="empty">No rows found for this report.</td></tr>';
 }
 function prevTrendTarget(level,code,name){
- prevCtx.trendLevel=level;prevCtx.trendCode=code;prevCtx.trendName=name;$('#prevTrendLoad').disabled=!code;
+ prevCtx.trendLevel=level;prevCtx.trendCode=code;prevCtx.trendName=name;$('#prevTrendLoad').disabled=!code;$('#prevTrendRefresh').disabled=!code;
  $('#prevTrendTitle').textContent=code?`Official 3–7 Day Trend — ${name}`:'Official 3–7 Day Trend';
  $('#prevTrendSub').textContent=code?'Uses the public official date-wise district endpoint and the saved archive.':'Select a district from the table first.';
 }
@@ -392,26 +392,42 @@ async function prevLoadSchools(code,name){
  prevCtx.level='school';prevCtx.clusterCode=code;prevCtx.clusterName=name;
  prevTrendTarget('cluster',code,name);const data=await prevPage('school',{districtCode:prevCtx.districtCode,blockCode:prevCtx.blockCode,clusterCode:code});prevRenderSummary(data);
 }
-$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district'){prevCtx.districtCode=a.dataset.code;prevCtx.districtName=a.dataset.name;prevTrendTarget('district',a.dataset.code,a.dataset.name);notice(`${a.dataset.name} selected. Use “Load Trend” for its 3–7 day official history. Historical block/cluster/school public drill-down will be connected after their public endpoints are captured.`,'info');}}catch(err){notice(err.message)}});
+$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district'){prevCtx.districtCode=a.dataset.code;prevCtx.districtName=a.dataset.name;prevTrendTarget('district',a.dataset.code,a.dataset.name);$('#prevTrendSummary').innerHTML='<div class="empty">District changed. Click “Load Trend” to load verified active reporting days.</div>';$('#prevTrendBody').innerHTML='<tr><td colspan="7" class="empty">No trend loaded for this district yet.</td></tr>';notice(`${a.dataset.name} selected. Load Trend will skip state-wide zero-reporting days and validate the district name/code before analysis.`,'info');}}catch(err){notice(err.message)}});
 $('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{await prevLoadDistricts()}catch(err){notice(err.message)}});
 $('#prevLoad').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevReset').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevDate').addEventListener('change',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 bindSearch('#prevSearch','#prevBody');
 
-$('#prevTrendLoad').addEventListener('click',async()=>{
+async function loadPreviousTrend(refresh=false){
  try{
   if(!prevCtx.trendCode)return;
   const endDate=uiDateToReport($('#prevDate').value),days=$('#prevTrendDays').value;
-  let url=`/api/official/history/trend?days=${days}&level=${prevCtx.trendLevel}&code=${encodeURIComponent(prevCtx.trendCode)}&endDate=${encodeURIComponent(endDate)}`;
-  if(prevCtx.trendLevel==='block')url+='&districtCode='+encodeURIComponent(prevCtx.districtCode);
-  if(prevCtx.trendLevel==='cluster')url+='&districtCode='+encodeURIComponent(prevCtx.districtCode)+'&blockCode='+encodeURIComponent(prevCtx.blockCode);
+  let url=`/api/official/history/trend?days=${days}&level=${prevCtx.trendLevel}&code=${encodeURIComponent(prevCtx.trendCode)}&name=${encodeURIComponent(prevCtx.trendName||'')}&endDate=${encodeURIComponent(endDate)}`;
+  if(refresh)url+='&refresh=1';
   const j=await jget(url),x=j.data;
-  const valid=x.points.filter(p=>p.available);
-  $('#prevTrendSummary').innerHTML=`<div class="prev-trend-point"><b>${x.daysAvailable} days</b><span>Official days available</span></div><div class="prev-trend-point"><b>${x.averageReportingPct.toFixed(2)}%</b><span>Average daily reporting</span></div><div class="prev-trend-point"><b>${x.bestDay?x.bestDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Best day ${x.bestDay?'• '+x.bestDay.date:''}</span></div><div class="prev-trend-point"><b>${x.worstDay?x.worstDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Lowest day ${x.worstDay?'• '+x.worstDay.date:''}</span></div>`;
-  $('#prevTrendBody').innerHTML=x.points.map(p=>p.available?`<tr><td>${p.date}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='archive'?'Saved Archive':'Public Official Source'}</td></tr>`:`<tr><td>${p.date}</td><td colspan="5" class="empty">Not available / not archived</td></tr>`).join('');
+
+  const warningHtml=(x.warnings||[]).length
+    ?`<div class="simple-note" style="grid-column:1/-1;border-color:#f1c4c4;background:#fff4f4;color:#9f2020"><b>Data check:</b> ${(x.warnings||[]).join(' ')}</div>`
+    :`<div class="simple-note" style="grid-column:1/-1;border-color:#cce9d2;background:#f2fbf4;color:#176b32"><b>Data check:</b> District name/code and school totals are consistent for the loaded trend.</div>`;
+
+  $('#prevTrendSummary').innerHTML=
+    `<div class="prev-trend-point"><b>${x.daysAvailable} active days</b><span>Non-reporting holidays/Sundays skipped</span></div>`+
+    `<div class="prev-trend-point"><b>${x.averageReportingPct.toFixed(2)}%</b><span>Average daily reporting</span></div>`+
+    `<div class="prev-trend-point"><b>${x.bestDay?x.bestDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Best day ${x.bestDay?'• '+x.bestDay.date:''}</span></div>`+
+    `<div class="prev-trend-point"><b>${x.worstDay?x.worstDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Lowest active day ${x.worstDay?'• '+x.worstDay.date:''}</span></div>`+
+    warningHtml;
+
+  $('#prevTrendBody').innerHTML=x.points.map(p=>p.available
+    ?`<tr><td>${p.date}</td><td>${fmt(p.totalSchools)}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='archive'?'Saved Archive':'Public Official Source'}</td></tr>`
+    :`<tr><td>${p.date}</td><td colspan="6" class="empty">Not available${p.error?' • '+p.error:''}</td></tr>`
+  ).join('');
+
+  if(refresh)notice('Official trend refreshed from source and the verified cache was replaced.','info');
  }catch(e){notice(e.message)}
-});
+}
+$('#prevTrendLoad').addEventListener('click',()=>loadPreviousTrend(false));
+$('#prevTrendRefresh').addEventListener('click',()=>loadPreviousTrend(true));
 
 
 // SMART INSIGHTS
@@ -421,7 +437,7 @@ async function loadSmartInsights(){try{const j=await jget('/api/analytics/insigh
 async function initHistory(){try{const ds=await districts();fill($('#histDistrict'),ds,'districtCode','district','All districts');await historyStatus();await loadHistory()}catch(e){notice(e.message)}}
 async function historyStatus(){try{const j=await jget('/api/history/status');$('#hSchoolRun').textContent=j.latestSchoolGap?dt(j.latestSchoolGap.capturedAt):'Not captured';$('#hSchoolRunSub').textContent=j.latestSchoolGap?`${j.latestSchoolGap.gapSchools} schools not reported • ${j.latestSchoolGap.reportDate}`:'Click “Capture Today’s School Gaps” once after deployment.'}catch(e){$('#hSchoolRun').textContent='Unavailable'}}
 async function histFiltersChanged(){const level=$('#histLevel').value,dc=$('#histDistrict').value;$('#histDistrict').disabled=false;$('#histBlock').disabled=!(level==='cluster'||level==='school')||!dc;if((level==='cluster'||level==='school')&&dc){const bs=await blocks(dc);fill($('#histBlock'),bs,'blockCode','block','All blocks')}else{$('#histBlock').innerHTML='<option value="">All blocks</option>'}await loadHistory()}
-async function loadHistory(){const days=$('#histDays').value,level=$('#histLevel').value,dc=$('#histDistrict').value,bc=$('#histBlock').value;let url=`/api/history/poor?days=${days}&level=${level}&limit=300`;if(dc)url+='&districtCode='+encodeURIComponent(dc);if(bc)url+='&blockCode='+encodeURIComponent(bc);const j=await jget(url),x=j.data;$('#hDays').textContent=x.daysTracked;$('#hDates').textContent=x.dates?.length?x.dates.join(', '):'No history yet';$('#hCount').textContent=fmt(x.rows.length);const repeat=x.rows.filter(r=>(level==='school'?r.missedDays:r.incompleteDays)>=2).length;$('#hRepeat').textContent=fmt(repeat);$('#histDownload').href=`/api/report/poor.csv?days=${days}&level=${level}${dc?'&districtCode='+encodeURIComponent(dc):''}${bc?'&blockCode='+encodeURIComponent(bc):''}`;const label=level[0].toUpperCase()+level.slice(1);$('#histTitle').textContent=`Poor-performing ${label}${level==='school'?'s':'s'} — Last ${x.daysTracked||days} Tracked Days`;if(level==='school'){ $('#histSub').textContent='Schools are ranked by how many daily school-gap captures found them still not reported.';$('#histHead').innerHTML='<tr><th>School</th><th>District / Block / Cluster</th><th>Days Not Reported</th><th>Not Reported Rate</th><th>Last Gap</th><th>Follow-up</th></tr>';$('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr><td><b>${r.entityName}</b><div style="font-size:9px;color:var(--muted)">${r.entityCode}</div></td><td>${r.districtName||''} / ${r.blockName||''} / ${r.clusterName||''}</td><td class="bad">${r.missedDays} of ${x.daysTracked}</td><td>${r.missRate.toFixed(1)}%</td><td>${r.lastGapDate||'—'}</td><td><span class="status-text ${r.missedDays>=2?'red':'amber'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No school gaps stored for this period yet.</td></tr>';}else{$('#histSub').textContent='Ranked first by repeated days with pending schools, then by average reporting completion.';$('#histHead').innerHTML=`<tr><th>${label}</th><th>Location</th><th>Days With Pending</th><th>Avg. Reporting</th><th>Lowest Reporting</th><th>Avg. Pending</th><th>Highest Pending</th><th>Follow-up</th></tr>`;$('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr><td><b>${r.entityName}</b></td><td>${level==='district'?'Assam':(r.districtName||'')+(level==='cluster'?' / '+(r.blockName||''):'')}</td><td class="bad">${r.incompleteDays} of ${r.daysTracked}</td><td>${r.avgReportingPct.toFixed(2)}%</td><td class="bad">${r.worstReportingPct.toFixed(2)}%</td><td>${r.avgPending.toFixed(1)}</td><td>${fmt(r.maxPending)}</td><td><span class="status-text ${r.status==='High attention'?'red':'amber'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No poor performers found in the stored history.</td></tr>';}}
+async function loadHistory(){const days=$('#histDays').value,level=$('#histLevel').value,dc=$('#histDistrict').value,bc=$('#histBlock').value;let url=`/api/history/poor?days=${days}&level=${level}&limit=300`;if(dc)url+='&districtCode='+encodeURIComponent(dc);if(bc)url+='&blockCode='+encodeURIComponent(bc);const j=await jget(url),x=j.data;$('#hDays').textContent=x.daysTracked;$('#hDates').textContent=x.dates?.length?x.dates.join(', '):'No history yet';$('#hCount').textContent=fmt(x.rows.length);const repeat=x.rows.filter(r=>(level==='school'?r.missedDays:r.incompleteDays)>=2).length;$('#hRepeat').textContent=fmt(repeat);$('#histDownload').href=`/api/report/poor.csv?days=${days}&level=${level}${dc?'&districtCode='+encodeURIComponent(dc):''}${bc?'&blockCode='+encodeURIComponent(bc):''}`;const label=level[0].toUpperCase()+level.slice(1);$('#histTitle').textContent=`Poor-performing ${label}${level==='school'?'s':'s'} — Last ${x.daysTracked||days} Days Observed`;if(level==='school'){ $('#histSub').textContent='Schools are ranked by how many daily school-gap captures found them still not reported.';$('#histHead').innerHTML='<tr><th>School</th><th>District / Block / Cluster</th><th>Days Not Reported</th><th>Not Reported Rate</th><th>Last Gap</th><th>Follow-up</th></tr>';$('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr><td><b>${r.entityName}</b><div style="font-size:9px;color:var(--muted)">${r.entityCode}</div></td><td>${r.districtName||''} / ${r.blockName||''} / ${r.clusterName||''}</td><td class="bad">${r.missedDays} of ${x.daysTracked}</td><td>${r.missRate.toFixed(1)}%</td><td>${r.lastGapDate||'—'}</td><td><span class="status-text ${r.missedDays>=2?'red':'amber'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No school gaps stored for this period yet.</td></tr>';}else{$('#histSub').textContent='Ranked first by repeated days with pending schools, then by average reporting completion.';$('#histHead').innerHTML=`<tr><th>${label}</th><th>Location</th><th>Days With Pending</th><th>Avg. Reporting</th><th>Lowest Reporting</th><th>Avg. Pending</th><th>Highest Pending</th><th>Follow-up</th></tr>`;$('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr><td><b>${r.entityName}</b></td><td>${level==='district'?'Assam':(r.districtName||'')+(level==='cluster'?' / '+(r.blockName||''):'')}</td><td class="bad">${r.incompleteDays} of ${r.daysTracked}</td><td>${r.avgReportingPct.toFixed(2)}%</td><td class="bad">${r.worstReportingPct.toFixed(2)}%</td><td>${r.avgPending.toFixed(1)}</td><td>${fmt(r.maxPending)}</td><td><span class="status-text ${r.status==='High attention'?'red':'amber'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No poor performers found in the stored history.</td></tr>';}}
 $('#histDays').addEventListener('change',loadHistory);$('#histLevel').addEventListener('change',histFiltersChanged);$('#histDistrict').addEventListener('change',histFiltersChanged);$('#histBlock').addEventListener('change',loadHistory);bindSearch('#histSearch','#histBody');
 $('#schoolGapNow').addEventListener('click',async()=>{try{$('#schoolGapNow').disabled=true;notice('Capturing today’s schools that are still not reported. Only incomplete clusters are opened, so this is lighter than crawling every school.','info');const j=await jget('/api/history/school-gaps/run?source=dashboard',{method:'POST'});notice(`School gap capture saved: ${j.data.gapSchools} schools still not reported across ${j.data.incompleteClusters} incomplete clusters.`,'info');await historyStatus();if($('#histLevel').value==='school')await loadHistory()}catch(e){notice(e.message)}finally{$('#schoolGapNow').disabled=false}});
 

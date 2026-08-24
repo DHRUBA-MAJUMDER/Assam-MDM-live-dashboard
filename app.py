@@ -184,6 +184,11 @@ def parse_schools(district_code, block_code, cluster_code):
 
 PUBLIC_STATE_REPORT_URL = "https://mdmhp.nic.in/Home/StateWiseSummary/AS"
 PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
+PUBLIC_HISTORY_CACHE_VERSION = "v6.2-public-district-verified"
+
+
+def normalize_district_name(value):
+    return re.sub(r"[^A-Z0-9]+", "", str(value or "").upper())
 
 
 def parse_public_historical_districts(html):
@@ -218,15 +223,32 @@ def parse_public_historical_districts(html):
     return rows
 
 
-def fetch_public_district_history(report_date):
-    """Use the public StateWiseSummary form and its fresh anti-forgery token."""
+def fetch_public_district_history(report_date, refresh=False):
+    """Use the public StateWiseSummary form and its fresh anti-forgery token.
+    V6.2 only trusts cache written by the verified parser version.
+    """
     report_date = validate_report_date(report_date)
 
-    # Cache first: once a historical date is saved, no need to hit NIC repeatedly.
-    cached = load_official_cache(report_date, "district")
-    if cached:
-        cached["source"] = "archive"
-        return cached
+    if not refresh:
+        cached = load_official_cache(report_date, "district")
+        if cached and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION:
+            cached["source"] = "archive"
+            return cached
+
+    # Remove stale/legacy cache for this date before writing the verified copy.
+    if db_enabled():
+        try:
+            scope_key = history_scope_key("district")
+            with db_connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM official_history_cache "
+                        "WHERE report_date=%s AND level='district' AND scope_key=%s",
+                        (report_date, scope_key),
+                    )
+                conn.commit()
+        except Exception as exc:
+            print("Historical cache cleanup warning:", exc, flush=True)
 
     s = requests.Session()
     s.headers.update(HEADERS)
@@ -255,12 +277,19 @@ def fetch_public_district_history(report_date):
     resp.raise_for_status()
 
     rows = parse_public_historical_districts(resp.text)
-    if not rows:
+    if len(rows) < 25:
         text = BeautifulSoup(resp.text, "html.parser").get_text(" ", strip=True)
         raise RuntimeError(
-            "Public historical district report did not return a district table."
+            f"Public historical district report returned only {len(rows)} district rows; "
+            "the result was not cached because it may be incomplete."
             + (f" Source message: {re.sub(r'\\s+', ' ', text)[:220]}" if text else "")
         )
+
+    # Ensure district codes and names are unique before trusting the page.
+    codes = [str(r.get("districtCode")) for r in rows]
+    names = [normalize_district_name(r.get("district")) for r in rows]
+    if len(set(codes)) != len(codes) or len(set(names)) != len(names):
+        raise RuntimeError("Historical district response contains duplicate district codes/names.")
 
     payload = {
         "reportDate": report_date,
@@ -269,16 +298,13 @@ def fetch_public_district_history(report_date):
         "source": "public-official",
         "sourceUrl": resp.url,
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "cacheVersion": PUBLIC_HISTORY_CACHE_VERSION,
     }
-    save_official_cache(
-        report_date, "district", payload,
-        source_url=resp.url
-    )
+    save_official_cache(report_date, "district", payload, source_url=resp.url)
     return payload
 
-
-def recent_public_active_district_days(days=7, end_date=None):
-    """Return the most recent active reporting days, skipping all-zero non-reporting days."""
+def recent_public_active_district_days(days=7, end_date=None, refresh=False):
+    """Return the most recent active reporting days, skipping state-wide all-zero days."""
     days = max(1, min(int(days), 7))
     if end_date:
         cursor = datetime.strptime(validate_report_date(end_date), "%d/%m/%Y").date()
@@ -287,15 +313,14 @@ def recent_public_active_district_days(days=7, end_date=None):
 
     found = []
     attempts = 0
-    # 28 calendar days is enough to find 7 active school/reporting days around holidays.
-    while len(found) < days and attempts < 28:
+    while len(found) < days and attempts < 35:
         ds = cursor.strftime("%d/%m/%Y")
         try:
-            page = fetch_public_district_history(ds)
+            page = fetch_public_district_history(ds, refresh=refresh)
             rows = page.get("rows", [])
             state_reported = sum(to_int(r.get("dailyReported")) for r in rows)
             state_meals = sum(to_int(r.get("mealsServed")) for r in rows)
-            # Skip Sundays/holidays/non-reporting dates where the state table is effectively all zero.
+            # Sundays/holidays/non-reporting dates must not reduce performance averages.
             if rows and (state_reported > 0 or state_meals > 0):
                 found.append(page)
         except Exception as exc:
@@ -305,7 +330,6 @@ def recent_public_active_district_days(days=7, end_date=None):
 
     found.reverse()
     return found
-
 
 def public_district_poor_performers(days=7, district_code=None, limit=200):
     pages = recent_public_active_district_days(days)
@@ -390,27 +414,74 @@ def public_district_poor_performers(days=7, district_code=None, limit=200):
     }
 
 
-def public_district_trend(report_dates, district_code):
+def public_district_trend(report_dates, district_code, district_name=None, refresh=False):
     points = []
+    warnings = []
+    expected_norm = normalize_district_name(district_name)
+
     for report_date in report_dates:
         try:
-            page = fetch_public_district_history(report_date)
-            row = next(
-                (r for r in page["rows"] if str(r.get("districtCode")) == str(district_code)),
+            page = fetch_public_district_history(report_date, refresh=refresh)
+            rows = page.get("rows", [])
+
+            row_by_code = next(
+                (r for r in rows if str(r.get("districtCode")) == str(district_code)),
                 None,
             )
+            row_by_name = next(
+                (r for r in rows if expected_norm and normalize_district_name(r.get("district")) == expected_norm),
+                None,
+            )
+
+            row = row_by_code
+            match_method = "district-code"
+
+            # If code and expected district name disagree, prefer the exact district name.
+            if district_name and row_by_code and normalize_district_name(row_by_code.get("district")) != expected_norm:
+                if row_by_name:
+                    row = row_by_name
+                    match_method = "district-name-fallback"
+                    warnings.append(
+                        f"{report_date}: district code {district_code} pointed to "
+                        f"{row_by_code.get('district')}; used exact name {district_name} instead."
+                    )
+                else:
+                    points.append({
+                        "date": report_date, "available": False,
+                        "error": "District code/name mismatch in official response."
+                    })
+                    continue
+            elif not row and row_by_name:
+                row = row_by_name
+                match_method = "district-name-fallback"
+                warnings.append(
+                    f"{report_date}: district was found by name because code {district_code} was not present."
+                )
+
             if not row:
                 points.append({"date": report_date, "available": False})
                 continue
+
             total = to_int(row.get("totalSchools"))
             reported = to_int(row.get("dailyReported"))
+            pending = to_int(row.get("dailyNotReported"))
+
+            # Basic arithmetic integrity check.
+            if total and reported + pending != total:
+                warnings.append(
+                    f"{report_date}: Reported + Pending ({reported + pending}) does not equal Total Schools ({total})."
+                )
+
             points.append({
                 "date": report_date,
                 "available": True,
+                "districtName": row.get("district"),
+                "districtCode": row.get("districtCode"),
+                "matchMethod": match_method,
                 "reportingPct": round((reported * 100.0 / total) if total else 0, 2),
                 "totalSchools": total,
                 "reported": reported,
-                "pending": to_int(row.get("dailyNotReported")),
+                "pending": pending,
                 "mealsServed": to_int(row.get("mealsServed")),
                 "source": page.get("source", "public-official"),
             })
@@ -418,9 +489,48 @@ def public_district_trend(report_dates, district_code):
             points.append({"date": report_date, "available": False, "error": str(exc)})
 
     valid = [p for p in points if p.get("available")]
+
+    # Detect suspicious school-total changes across a short trend.
+    totals = [p["totalSchools"] for p in valid if p.get("totalSchools")]
+    if totals:
+        common_total = max(set(totals), key=totals.count)
+        for p in valid:
+            t = p.get("totalSchools") or 0
+            if common_total and abs(t - common_total) / common_total > 0.10:
+                warnings.append(
+                    f"{p['date']}: Total Schools is {t:,}, while the usual value in this trend is "
+                    f"{common_total:,}. Verify this date before using it for analysis."
+                )
+
+    # Compare against today's live district reference when possible.
+    live_reference = None
+    try:
+        live_rows = parse_districts()
+        live_by_code = next(
+            (r for r in live_rows if str(r.get("districtCode")) == str(district_code)),
+            None,
+        )
+        live_by_name = next(
+            (r for r in live_rows if expected_norm and normalize_district_name(r.get("district")) == expected_norm),
+            None,
+        )
+        live_reference = live_by_name or live_by_code
+        if live_reference and totals:
+            live_total = to_int(live_reference.get("totalSchools"))
+            common_total = max(set(totals), key=totals.count)
+            if live_total and common_total and abs(common_total - live_total) / live_total > 0.15:
+                warnings.append(
+                    f"Data check: selected district {district_name or district_code} currently has "
+                    f"{live_total:,} schools, but the historical trend is showing about {common_total:,}. "
+                    "The trend is marked for verification."
+                )
+    except Exception:
+        pass
+
     return {
         "level": "district",
         "entityCode": district_code,
+        "entityName": district_name,
         "points": points,
         "daysAvailable": len(valid),
         "averageReportingPct": round(
@@ -428,7 +538,15 @@ def public_district_trend(report_dates, district_code):
         ) if valid else 0,
         "worstDay": min(valid, key=lambda p: p["reportingPct"]) if valid else None,
         "bestDay": max(valid, key=lambda p: p["reportingPct"]) if valid else None,
+        "warnings": list(dict.fromkeys(warnings)),
+        "verified": len(warnings) == 0,
+        "liveReference": {
+            "district": live_reference.get("district"),
+            "districtCode": live_reference.get("districtCode"),
+            "totalSchools": to_int(live_reference.get("totalSchools")),
+        } if live_reference else None,
     }
+
 
 
 # -------------------- OFFICIAL PREVIOUS REPORTS --------------------
@@ -711,9 +829,9 @@ def get_official_history_page(report_date, level, district_code=None, block_code
     )
 
 
-def official_history_trend(report_dates, level, entity_code, district_code=None, block_code=None, cluster_code=None):
+def official_history_trend(report_dates, level, entity_code, district_code=None, block_code=None, cluster_code=None, entity_name=None, refresh=False):
     if level == "district":
-        return public_district_trend(report_dates, entity_code)
+        return public_district_trend(report_dates, entity_code, entity_name, refresh=refresh)
     points = []
     for report_date in report_dates:
         try:
@@ -1321,7 +1439,8 @@ def historical_poor_performers(level="district", days=3, district_code=None, blo
                 if block_code:
                     clauses.append("block_code=%s"); params.append(block_code)
                 sql=f"""
-                    SELECT school_code,MAX(school_name),MAX(shift_id),MAX(district_code),MAX(district_name),
+                    SELECT school_code,COALESCE(NULLIF(MAX(school_name),''),school_code),COALESCE(NULLIF(MAX(shift_id),''),'1'),
+                           MAX(district_code),MAX(district_name),
                            MAX(block_code),MAX(block_name),MAX(cluster_code),MAX(cluster_name),
                            COUNT(DISTINCT report_date) AS missed_days,
                            MAX(to_date(report_date,'DD/MM/YYYY')) AS last_gap_date
@@ -1424,7 +1543,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.1", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.2", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -1515,13 +1634,21 @@ def official_history_trend_route():
             return jsonify({"ok": False, "error": "V6.1 official previous-report trend is currently available for districts."}), 400
         if not code or not end_date:
             return jsonify({"ok": False, "error": "code and endDate are required"}), 400
-        end_dt = datetime.strptime(validate_report_date(end_date), "%d/%m/%Y")
-        dates = [(end_dt - timedelta(days=i)).strftime("%d/%m/%Y") for i in reversed(range(days))]
+        refresh = request.args.get("refresh") == "1"
+        if level == "district":
+            pages = recent_public_active_district_days(days, end_date, refresh=refresh)
+            dates = [p.get("reportDate") for p in pages]
+        else:
+            end_dt = datetime.strptime(validate_report_date(end_date), "%d/%m/%Y")
+            dates = [(end_dt - timedelta(days=i)).strftime("%d/%m/%Y") for i in reversed(range(days))]
+
         data = official_history_trend(
             dates, level, code,
             request.args.get("districtCode"),
             request.args.get("blockCode"),
             request.args.get("clusterCode"),
+            entity_name=request.args.get("name"),
+            refresh=False,
         )
         return jsonify({"ok": True, "data": data})
     except Exception as e:
@@ -1631,23 +1758,98 @@ def analytics_insights_route():
 @app.get("/api/report/poor.csv")
 def poor_csv():
     try:
-        level=request.args.get("level","district")
-        days=to_int(request.args.get("days",7)) or 7
-        data=historical_poor_performers(level,days,request.args.get("districtCode"),request.args.get("blockCode"),500)
-        buff=io.StringIO(); w=csv.writer(buff)
-        if level=="school":
-            w.writerow(["Period","School","District","Block","Cluster","Tracked Days","Days Not Reported","Not Reported Rate %","Last Not Reported Date","Follow-up Status"])
+        level = request.args.get("level", "district")
+        days = to_int(request.args.get("days", 7)) or 7
+        data = historical_poor_performers(
+            level, days,
+            request.args.get("districtCode"),
+            request.args.get("blockCode"),
+            500
+        )
+
+        buff = io.StringIO()
+        buff.write("\ufeff")  # Excel-friendly UTF-8 BOM
+        w = csv.writer(buff)
+        period = f"Last {data.get('daysTracked', 0)} available days"
+
+        if level == "district":
+            w.writerow([
+                "Period", "District", "District Code", "Days Observed",
+                "Days With Pending Schools", "Average Daily Reporting %",
+                "Lowest Daily Reporting %", "Average Pending Schools",
+                "Highest Pending Schools", "Follow-up Status"
+            ])
             for r in data["rows"]:
-                w.writerow([f"Last {data['daysTracked']} tracked days",r["entityName"],r.get("districtName"),r.get("blockName"),r.get("clusterName"),data["daysTracked"],r["missedDays"],r["missRate"],r.get("lastGapDate"),r["status"]])
+                w.writerow([
+                    period, r.get("entityName"), r.get("entityCode"),
+                    r.get("daysTracked"), r.get("incompleteDays"),
+                    r.get("avgReportingPct"), r.get("worstReportingPct"),
+                    r.get("avgPending"), r.get("maxPending"), r.get("status")
+                ])
+
+        elif level == "block":
+            w.writerow([
+                "Period", "District", "District Code", "Block", "Block Code",
+                "Days Observed", "Days With Pending Schools",
+                "Average Daily Reporting %", "Lowest Daily Reporting %",
+                "Average Pending Schools", "Highest Pending Schools",
+                "Follow-up Status"
+            ])
+            for r in data["rows"]:
+                w.writerow([
+                    period, r.get("districtName"), r.get("districtCode"),
+                    r.get("entityName"), r.get("entityCode"),
+                    r.get("daysTracked"), r.get("incompleteDays"),
+                    r.get("avgReportingPct"), r.get("worstReportingPct"),
+                    r.get("avgPending"), r.get("maxPending"), r.get("status")
+                ])
+
+        elif level == "cluster":
+            w.writerow([
+                "Period", "District", "District Code", "Block", "Block Code",
+                "Cluster", "Cluster Code", "Days Observed",
+                "Days With Pending Schools", "Average Daily Reporting %",
+                "Lowest Daily Reporting %", "Average Pending Schools",
+                "Highest Pending Schools", "Follow-up Status"
+            ])
+            for r in data["rows"]:
+                w.writerow([
+                    period, r.get("districtName"), r.get("districtCode"),
+                    r.get("blockName"), r.get("blockCode"),
+                    r.get("entityName"), r.get("entityCode"),
+                    r.get("daysTracked"), r.get("incompleteDays"),
+                    r.get("avgReportingPct"), r.get("worstReportingPct"),
+                    r.get("avgPending"), r.get("maxPending"), r.get("status")
+                ])
+
+        elif level == "school":
+            w.writerow([
+                "Period", "District", "District Code", "Block", "Block Code",
+                "Cluster", "Cluster Code", "School Name", "School Code", "Shift",
+                "Days Observed", "Days Not Reported", "Not Reported Rate %",
+                "Last Not Reported Date", "Follow-up Status"
+            ])
+            for r in data["rows"]:
+                w.writerow([
+                    period, r.get("districtName"), r.get("districtCode"),
+                    r.get("blockName"), r.get("blockCode"),
+                    r.get("clusterName"), r.get("clusterCode"),
+                    r.get("entityName"), r.get("entityCode"), r.get("shift"),
+                    data.get("daysTracked"), r.get("missedDays"), r.get("missRate"),
+                    r.get("lastGapDate"), r.get("status")
+                ])
         else:
-            label=level.title()
-            w.writerow(["Period",label,"District","Block","Tracked Days","Days With Pending Schools","Average Daily Reporting %","Lowest Daily Reporting %","Average Pending Schools","Highest Pending Schools","Follow-up Status"])
-            for r in data["rows"]:
-                w.writerow([f"Last {data['daysTracked']} tracked days",r["entityName"],r.get("districtName"),r.get("blockName"),r["daysTracked"],r["incompleteDays"],r["avgReportingPct"],r["worstReportingPct"],r["avgPending"],r["maxPending"],r["status"]])
-        filename=f"MDM_Poor_Performance_{level}_{days}days.csv"
-        return Response(buff.getvalue(),mimetype="text/csv",headers={"Content-Disposition":f'attachment; filename="{filename}"'})
+            return jsonify({"ok": False, "error": "level must be district, block, cluster or school"}), 400
+
+        filename = f"MDM_Follow_Up_{level}_{days}days.csv"
+        return Response(
+            buff.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
     except Exception as e:
-        return jsonify({"ok":False,"error":f"{type(e).__name__}: {e}"}),500
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
+
 
 
 @app.get("/api/report/daily.csv")

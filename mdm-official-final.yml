@@ -1,0 +1,23 @@
+name: MDM Official Final Archive
+
+on:
+  schedule:
+    # 05:45 PM IST = 12:15 PM UTC. Saves official final aggregate reports after the portal's backdated-report window opens.
+    - cron: '15 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-final:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Archive official final reports
+        run: |
+          echo "Archiving official MDM final district/block/cluster reports..."
+          curl --fail --show-error --silent \
+            --retry 3 --retry-delay 30 \
+            --max-time 1200 \
+            -X POST \
+            "https://assam-mdm-dashboard.onrender.com/api/official/archive/final?source=github-actions"

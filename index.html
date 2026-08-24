@@ -56,7 +56,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics, Tracker & Previous Reports</p></div></div>
+ <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics, Tracker & Public Previous Reports</p></div></div>
  <nav>
   <button class="navbtn active" data-view="executive">Executive Dashboard</button>
   <button class="navbtn" data-view="drill">Drill-down</button>
@@ -145,11 +145,11 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 <!-- 3–7 DAY HISTORY -->
 <section id="view-history" class="view">
  <section class="panel"><div class="phead"><div><h3>3–7 Day Poor Performance Review</h3><p>Find districts, blocks, clusters and schools that repeatedly remain incomplete.</p></div><button id="schoolGapNow" class="btn warn">Capture Today's School Gaps</button></div><div class="filters">
-  <div class="field"><label>Period</label><select id="histDays"><option value="3">Last 3 tracked days</option><option value="5">Last 5 tracked days</option><option value="7" selected>Last 7 tracked days</option></select></div>
+  <div class="field"><label>Period</label><select id="histDays"><option value="3">Last 3 available days</option><option value="5">Last 5 available days</option><option value="7" selected>Last 7 available days</option></select></div>
   <div class="field"><label>Level</label><select id="histLevel"><option value="district">District</option><option value="block">Block</option><option value="cluster">Cluster</option><option value="school">School</option></select></div>
   <div class="field"><label>District filter</label><select id="histDistrict"><option value="">All districts</option></select></div>
   <div class="field"><label>Block filter</label><select id="histBlock" disabled><option value="">All blocks</option></select></div>
- </div><div class="pbody"><div class="simple-note">District, block and cluster history uses the last stored tracker snapshot for each report date. School history stores only schools that were still not reported during the daily school-gap capture. This keeps the tracker practical and avoids making thousands of school requests every 30 minutes.</div></div></section>
+ </div><div class="pbody"><div class="simple-note">District history now uses the public official date-wise report, so 3–7 day district analysis works immediately and skips all-zero non-reporting days. Block and cluster history still uses stored tracker snapshots; school history uses daily school-gap captures.</div></div></section>
  <div class="history-cards">
   <div class="card"><span>Tracked Days Available</span><strong id="hDays">—</strong><small id="hDates">—</small></div>
   <div class="card"><span>Entities Needing Follow-up</span><strong class="red" id="hCount">—</strong></div>
@@ -164,7 +164,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 <section id="view-previous" class="view">
  <section class="panel">
   <div class="phead">
-   <div><h3>Previous Official Reports</h3><p>Open saved backdated reports any time. If a page is not archived yet, the dashboard only queries the official source after 5:00 PM IST.</p></div>
+   <div><h3>Previous Official Reports</h3><p>District previous reports use the public official date-wise endpoint and are cached automatically in PostgreSQL.</p></div>
    <div><span id="prevSource" class="prev-source">Not loaded</span></div>
   </div>
   <div class="prev-toolbar">
@@ -174,7 +174,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
    <button id="prevReset" class="btn soft">Back to Districts</button>
   </div>
   <div class="pbody">
-   <div class="simple-note" id="prevAvailability">Saved pages are available from our database at any time. New official backdated pages are fetched only after 5 PM IST and then cached automatically.</div>
+   <div class="simple-note" id="prevAvailability">Public district reports are fetched directly when available and cached automatically. V6.1 does not impose a 5 PM restriction.</div><div class="simple-note" style="margin-top:9px"><b>V6.1 scope:</b> previous District reports + District 3/5/7-day trend are connected to the public endpoint. Historical Block / Cluster / School drill-down is intentionally not guessed; live drill-down remains fully available.</div>
   </div>
  </section>
 
@@ -321,7 +321,7 @@ function prevSetCards(rows,level,label,name){
  const s=prevScopeSummary(rows,level);$('#prevLevel').textContent=label;$('#prevName').textContent=name||'Assam';$('#prevSchools').textContent=fmt(s.schools);$('#prevPending').textContent=fmt(s.pending);$('#prevMeals').textContent=fmt(s.meals);
 }
 function prevSourceBadge(source){
- const el=$('#prevSource');el.className='prev-source'+(source==='archive'?' archive':'');el.textContent=source==='archive'?'Saved Archive':'Official Source';
+ const el=$('#prevSource');el.className='prev-source'+(source==='archive'?' archive':'');el.textContent=source==='archive'?'Saved Archive':'Public Official Source';
 }
 function prevBreadcrumb(){
  const b=[`<button class="prev-crumb" data-prev-level="district">Assam / Districts</button>`];
@@ -365,16 +365,14 @@ function prevRenderSummary(data){
 function prevTrendTarget(level,code,name){
  prevCtx.trendLevel=level;prevCtx.trendCode=code;prevCtx.trendName=name;$('#prevTrendLoad').disabled=!code;
  $('#prevTrendTitle').textContent=code?`Official 3–7 Day Trend — ${name}`:'Official 3–7 Day Trend';
- $('#prevTrendSub').textContent=code?'Uses saved archive first; missing pages are fetched from the official source only when its after-5-PM window is open.':'Open a district, block or cluster first.';
+ $('#prevTrendSub').textContent=code?'Uses the public official date-wise district endpoint and the saved archive.':'Select a district from the table first.';
 }
 async function initPrevious(force=false){
  try{
   if(!$('#prevDate').value)$('#prevDate').value=prevDefaultDate();
   const st=await jget('/api/official/history/status');
   const x=st.data;
-  $('#prevAvailability').textContent=x.officialWindowOpen
-   ?`Official backdated-report window is open now. ${fmt(x.cachedPages)} report pages are already saved in the dashboard archive.`
-   :`Official backdated-report window is currently closed. ${fmt(x.cachedPages)} saved report pages remain available from the dashboard archive.`;
+  $('#prevAvailability').textContent=`Public district history is connected. ${fmt(x.cachedPages)} report pages are already saved in the dashboard archive. District reports can be requested directly whenever the public endpoint returns them.`;
   if(force||!$('#prevBody').children.length)await prevLoadDistricts();
  }catch(e){notice(e.message)}
 }
@@ -394,8 +392,8 @@ async function prevLoadSchools(code,name){
  prevCtx.level='school';prevCtx.clusterCode=code;prevCtx.clusterName=name;
  prevTrendTarget('cluster',code,name);const data=await prevPage('school',{districtCode:prevCtx.districtCode,blockCode:prevCtx.blockCode,clusterCode:code});prevRenderSummary(data);
 }
-$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district')await prevLoadBlocks(a.dataset.code,a.dataset.name);else if(a.dataset.level==='block')await prevLoadClusters(a.dataset.code,a.dataset.name);else if(a.dataset.level==='cluster')await prevLoadSchools(a.dataset.code,a.dataset.name)}catch(err){notice(err.message)}});
-$('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{const l=b.dataset.prevLevel;if(l==='district')await prevLoadDistricts();else if(l==='block')await prevLoadBlocks(prevCtx.districtCode,prevCtx.districtName);else if(l==='cluster')await prevLoadClusters(prevCtx.blockCode,prevCtx.blockName);else if(l==='school')await prevLoadSchools(prevCtx.clusterCode,prevCtx.clusterName)}catch(err){notice(err.message)}});
+$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district'){prevCtx.districtCode=a.dataset.code;prevCtx.districtName=a.dataset.name;prevTrendTarget('district',a.dataset.code,a.dataset.name);notice(`${a.dataset.name} selected. Use “Load Trend” for its 3–7 day official history. Historical block/cluster/school public drill-down will be connected after their public endpoints are captured.`,'info');}}catch(err){notice(err.message)}});
+$('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{await prevLoadDistricts()}catch(err){notice(err.message)}});
 $('#prevLoad').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevReset').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevDate').addEventListener('change',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
@@ -411,7 +409,7 @@ $('#prevTrendLoad').addEventListener('click',async()=>{
   const j=await jget(url),x=j.data;
   const valid=x.points.filter(p=>p.available);
   $('#prevTrendSummary').innerHTML=`<div class="prev-trend-point"><b>${x.daysAvailable} days</b><span>Official days available</span></div><div class="prev-trend-point"><b>${x.averageReportingPct.toFixed(2)}%</b><span>Average daily reporting</span></div><div class="prev-trend-point"><b>${x.bestDay?x.bestDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Best day ${x.bestDay?'• '+x.bestDay.date:''}</span></div><div class="prev-trend-point"><b>${x.worstDay?x.worstDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Lowest day ${x.worstDay?'• '+x.worstDay.date:''}</span></div>`;
-  $('#prevTrendBody').innerHTML=x.points.map(p=>p.available?`<tr><td>${p.date}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='archive'?'Saved Archive':'Official Source'}</td></tr>`:`<tr><td>${p.date}</td><td colspan="5" class="empty">Not available / not archived</td></tr>`).join('');
+  $('#prevTrendBody').innerHTML=x.points.map(p=>p.available?`<tr><td>${p.date}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='archive'?'Saved Archive':'Public Official Source'}</td></tr>`:`<tr><td>${p.date}</td><td colspan="5" class="empty">Not available / not archived</td></tr>`).join('');
  }catch(e){notice(e.message)}
 });
 

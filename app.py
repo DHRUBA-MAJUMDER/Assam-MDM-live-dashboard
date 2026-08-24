@@ -179,6 +179,258 @@ def parse_schools(district_code, block_code, cluster_code):
 
 
 
+
+# -------------------- PUBLIC HISTORICAL DISTRICT REPORTS --------------------
+
+PUBLIC_STATE_REPORT_URL = "https://mdmhp.nic.in/Home/StateWiseSummary/AS"
+PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
+
+
+def parse_public_historical_districts(html):
+    """Parse the public date-wise district table.
+    Layout: Sr.No, District, Total Schools, Reported, Not Reported, Meals Served.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    rows = []
+    for tr in soup.select("table tbody tr"):
+        cells = clean_cells(tr)
+        if len(cells) < 6:
+            continue
+        district_cell = tr.find("td", onclick=True)
+        if not district_cell:
+            continue
+        codes = re.findall(r"'([^']+)'", district_cell.get("onclick", ""))
+        district_code = codes[1] if len(codes) >= 2 else None
+        district_name = cells[1].strip()
+        if not district_code or not district_name:
+            continue
+        rows.append({
+            "district": district_name,
+            "districtCode": district_code,
+            "totalSchools": to_int(cells[2]),
+            "monthlyReported": 0,
+            "monthlyNotReported": 0,
+            "enrolled": 0,
+            "dailyReported": to_int(cells[3]),
+            "dailyNotReported": to_int(cells[4]),
+            "mealsServed": to_int(cells[5]),
+        })
+    return rows
+
+
+def fetch_public_district_history(report_date):
+    """Use the public StateWiseSummary form and its fresh anti-forgery token."""
+    report_date = validate_report_date(report_date)
+
+    # Cache first: once a historical date is saved, no need to hit NIC repeatedly.
+    cached = load_official_cache(report_date, "district")
+    if cached:
+        cached["source"] = "archive"
+        return cached
+
+    s = requests.Session()
+    s.headers.update(HEADERS)
+
+    landing = s.get(PUBLIC_STATE_REPORT_URL, timeout=40)
+    landing.raise_for_status()
+    soup = BeautifulSoup(landing.text, "html.parser")
+    token = soup.find("input", attrs={"name": "__RequestVerificationToken"})
+    if not token or not token.get("value"):
+        raise RuntimeError("Public historical page token was not found.")
+
+    resp = s.post(
+        PUBLIC_DISTRICT_HISTORY_URL,
+        data={
+            "stateCode": STATE_CODE,
+            "mealServedDate": report_date,
+            "__RequestVerificationToken": token.get("value"),
+        },
+        headers={
+            **HEADERS,
+            "Referer": PUBLIC_STATE_REPORT_URL,
+            "X-Requested-With": "XMLHttpRequest",
+        },
+        timeout=50,
+    )
+    resp.raise_for_status()
+
+    rows = parse_public_historical_districts(resp.text)
+    if not rows:
+        text = BeautifulSoup(resp.text, "html.parser").get_text(" ", strip=True)
+        raise RuntimeError(
+            "Public historical district report did not return a district table."
+            + (f" Source message: {re.sub(r'\\s+', ' ', text)[:220]}" if text else "")
+        )
+
+    payload = {
+        "reportDate": report_date,
+        "level": "district",
+        "rows": rows,
+        "source": "public-official",
+        "sourceUrl": resp.url,
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    save_official_cache(
+        report_date, "district", payload,
+        source_url=resp.url
+    )
+    return payload
+
+
+def recent_public_active_district_days(days=7, end_date=None):
+    """Return the most recent active reporting days, skipping all-zero non-reporting days."""
+    days = max(1, min(int(days), 7))
+    if end_date:
+        cursor = datetime.strptime(validate_report_date(end_date), "%d/%m/%Y").date()
+    else:
+        cursor = datetime.now(IST).date() - timedelta(days=1)
+
+    found = []
+    attempts = 0
+    # 28 calendar days is enough to find 7 active school/reporting days around holidays.
+    while len(found) < days and attempts < 28:
+        ds = cursor.strftime("%d/%m/%Y")
+        try:
+            page = fetch_public_district_history(ds)
+            rows = page.get("rows", [])
+            state_reported = sum(to_int(r.get("dailyReported")) for r in rows)
+            state_meals = sum(to_int(r.get("mealsServed")) for r in rows)
+            # Skip Sundays/holidays/non-reporting dates where the state table is effectively all zero.
+            if rows and (state_reported > 0 or state_meals > 0):
+                found.append(page)
+        except Exception as exc:
+            print("Public history date warning:", ds, exc, flush=True)
+        cursor -= timedelta(days=1)
+        attempts += 1
+
+    found.reverse()
+    return found
+
+
+def public_district_poor_performers(days=7, district_code=None, limit=200):
+    pages = recent_public_active_district_days(days)
+    if not pages:
+        return {
+            "level": "district", "requestedDays": days, "daysTracked": 0,
+            "dates": [], "rows": [], "source": "public-official"
+        }
+
+    per_code = {}
+    for page in pages:
+        report_date = page["reportDate"]
+        for r in page.get("rows", []):
+            if district_code and str(r.get("districtCode")) != str(district_code):
+                continue
+            code = str(r.get("districtCode"))
+            total = to_int(r.get("totalSchools"))
+            reported = to_int(r.get("dailyReported"))
+            pending = to_int(r.get("dailyNotReported"))
+            meals = to_int(r.get("mealsServed"))
+            pct_value = (reported * 100.0 / total) if total else 0
+            item = per_code.setdefault(code, {
+                "entityCode": code,
+                "entityName": r.get("district"),
+                "districtCode": code,
+                "districtName": r.get("district"),
+                "blockCode": None, "blockName": None,
+                "clusterCode": None, "clusterName": None,
+                "points": [],
+            })
+            item["points"].append({
+                "date": report_date,
+                "reportingPct": pct_value,
+                "pending": pending,
+                "meals": meals,
+            })
+
+    out = []
+    for item in per_code.values():
+        pts = item.pop("points")
+        tracked = len(pts)
+        if not tracked:
+            continue
+        incomplete = sum(1 for p in pts if p["pending"] > 0)
+        avg_pct = sum(p["reportingPct"] for p in pts) / tracked
+        worst_pct = min(p["reportingPct"] for p in pts)
+        avg_pending = sum(p["pending"] for p in pts) / tracked
+        max_pending = max(p["pending"] for p in pts)
+        avg_meals = sum(p["meals"] for p in pts) / tracked
+
+        # Keep only entities with an actual historical gap.
+        if incomplete == 0 and avg_pct >= 100:
+            continue
+
+        if incomplete == tracked and tracked >= 2 and avg_pct < 95:
+            status = "High attention"
+        elif incomplete >= max(2, (tracked + 1) // 2) or avg_pct < 98:
+            status = "Needs follow-up"
+        else:
+            status = "Occasional gap"
+
+        item.update({
+            "daysTracked": tracked,
+            "incompleteDays": incomplete,
+            "avgReportingPct": round(avg_pct, 2),
+            "worstReportingPct": round(worst_pct, 2),
+            "avgPending": round(avg_pending, 1),
+            "maxPending": int(max_pending),
+            "avgMeals": round(avg_meals, 1),
+            "status": status,
+        })
+        out.append(item)
+
+    out.sort(key=lambda r: (-r["incompleteDays"], r["avgReportingPct"], -r["avgPending"]))
+    return {
+        "level": "district",
+        "requestedDays": days,
+        "daysTracked": len(pages),
+        "dates": [p["reportDate"] for p in pages],
+        "rows": out[:max(1, min(int(limit), 500))],
+        "source": "public-official",
+    }
+
+
+def public_district_trend(report_dates, district_code):
+    points = []
+    for report_date in report_dates:
+        try:
+            page = fetch_public_district_history(report_date)
+            row = next(
+                (r for r in page["rows"] if str(r.get("districtCode")) == str(district_code)),
+                None,
+            )
+            if not row:
+                points.append({"date": report_date, "available": False})
+                continue
+            total = to_int(row.get("totalSchools"))
+            reported = to_int(row.get("dailyReported"))
+            points.append({
+                "date": report_date,
+                "available": True,
+                "reportingPct": round((reported * 100.0 / total) if total else 0, 2),
+                "totalSchools": total,
+                "reported": reported,
+                "pending": to_int(row.get("dailyNotReported")),
+                "mealsServed": to_int(row.get("mealsServed")),
+                "source": page.get("source", "public-official"),
+            })
+        except Exception as exc:
+            points.append({"date": report_date, "available": False, "error": str(exc)})
+
+    valid = [p for p in points if p.get("available")]
+    return {
+        "level": "district",
+        "entityCode": district_code,
+        "points": points,
+        "daysAvailable": len(valid),
+        "averageReportingPct": round(
+            sum(p["reportingPct"] for p in valid) / len(valid), 2
+        ) if valid else 0,
+        "worstDay": min(valid, key=lambda p: p["reportingPct"]) if valid else None,
+        "bestDay": max(valid, key=lambda p: p["reportingPct"]) if valid else None,
+    }
+
+
 # -------------------- OFFICIAL PREVIOUS REPORTS --------------------
 
 def validate_report_date(value):
@@ -433,21 +685,35 @@ def fetch_official_history_page(report_date, level, district_code=None, block_co
 
 def get_official_history_page(report_date, level, district_code=None, block_code=None, cluster_code=None, refresh=False):
     report_date = validate_report_date(report_date)
-    if not refresh:
-        cached = load_official_cache(report_date, level, district_code, block_code, cluster_code)
-        if cached:
-            return cached
 
-    if not official_window_open():
-        raise RuntimeError(
-            "This report is not in the dashboard archive yet. "
-            "The official backdated-report source is only queried after 5:00 PM IST. "
-            "Open/save this date after 5 PM once, then the archived copy is available any time."
-        )
-    return fetch_official_history_page(report_date, level, district_code, block_code, cluster_code)
+    # V6.1: district history uses the public StateWiseSummary -> DisttWiseSummary endpoint.
+    if level == "district":
+        if refresh and db_enabled():
+            # Refresh means re-fetch from source instead of using the cached district page.
+            scope_key = history_scope_key("district")
+            with db_connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM official_history_cache WHERE report_date=%s AND level='district' AND scope_key=%s",
+                        (report_date, scope_key)
+                    )
+                conn.commit()
+        return fetch_public_district_history(report_date)
+
+    # We intentionally do not guess historical block/cluster/school POST endpoints.
+    cached = load_official_cache(report_date, level, district_code, block_code, cluster_code)
+    if cached:
+        return cached
+    raise RuntimeError(
+        "District previous reports are connected through the public historical endpoint in V6.1. "
+        "Historical Block / Cluster / School public endpoints are not connected yet; "
+        "live drill-down is still available."
+    )
 
 
 def official_history_trend(report_dates, level, entity_code, district_code=None, block_code=None, cluster_code=None):
+    if level == "district":
+        return public_district_trend(report_dates, entity_code)
     points = []
     for report_date in report_dates:
         try:
@@ -500,76 +766,36 @@ def archive_official_final(report_date=None, source="manual"):
         if report_date is None:
             report_date = datetime.now(IST).strftime("%d/%m/%Y")
         report_date = validate_report_date(report_date)
-        if not official_window_open():
-            raise RuntimeError("Official final archive runs only after 5:00 PM IST.")
 
-        # District page -> every block page -> every cluster page.
-        # School pages are archived only for clusters still showing pending schools.
-        district_page = get_official_history_page(report_date, "district", refresh=True)
-        district_pages = 1
-        block_pages = cluster_pages = school_pages = 0
-
-        for d in district_page["rows"]:
-            dc = d.get("districtCode")
-            if not dc:
-                continue
-            try:
-                block_page = get_official_history_page(report_date, "block", dc, refresh=True)
-                block_pages += 1
-            except Exception as exc:
-                print("Official block archive warning:", dc, exc, flush=True)
-                continue
-
-            for b in block_page["rows"]:
-                bc = b.get("blockCode")
-                if not bc:
-                    continue
-                try:
-                    cluster_page = get_official_history_page(report_date, "cluster", dc, bc, refresh=True)
-                    cluster_pages += 1
-                except Exception as exc:
-                    print("Official cluster archive warning:", bc, exc, flush=True)
-                    continue
-
-                for c in cluster_page["rows"]:
-                    # Full all-school daily crawling would create thousands of requests.
-                    # Cache school reports only where follow-up is actually needed.
-                    if to_int(c.get("dailyNotReported")) <= 0:
-                        continue
-                    cc = c.get("clusterCode")
-                    if not cc:
-                        continue
-                    try:
-                        get_official_history_page(report_date, "school", dc, bc, cc, refresh=True)
-                        school_pages += 1
-                    except Exception as exc:
-                        print("Official school archive warning:", cc, exc, flush=True)
-
+        page = get_official_history_page(report_date, "district", refresh=True)
         duration = (datetime.now(timezone.utc) - started).total_seconds()
+
         with db_connect() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO official_archive_runs(
                         report_date,source,district_pages,block_pages,cluster_pages,school_pages,duration_seconds
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s)
+                    ) VALUES(%s,%s,1,0,0,0,%s)
                     RETURNING id,captured_at
-                """, (report_date, source, district_pages, block_pages, cluster_pages, school_pages, duration))
+                """, (report_date, source, duration))
                 run_id, captured_at = cur.fetchone()
             conn.commit()
+
         return {
             "skipped": False,
             "runId": run_id,
             "capturedAt": captured_at.isoformat(),
             "reportDate": report_date,
-            "districtPages": district_pages,
-            "blockPages": block_pages,
-            "clusterPages": cluster_pages,
-            "schoolPages": school_pages,
+            "districtPages": 1,
+            "blockPages": 0,
+            "clusterPages": 0,
+            "schoolPages": 0,
+            "districts": len(page.get("rows", [])),
             "durationSeconds": round(duration, 2),
+            "note": "V6.1 archives the public district historical page. Deeper public history endpoints are pending discovery.",
         }
     finally:
         OFFICIAL_ARCHIVE_LOCK.release()
-
 
 def official_archive_status():
     if not db_enabled():
@@ -1068,9 +1294,15 @@ def _history_dates_from_tracker(days):
 
 
 def historical_poor_performers(level="district", days=3, district_code=None, block_code=None, limit=200):
+    days=max(1,min(int(days),7)); limit=max(1,min(int(limit),500))
+
+    # V6.1 district analysis comes from the public official date-wise endpoint,
+    # so it works immediately without waiting for our tracker to accumulate days.
+    if level == "district":
+        return public_district_poor_performers(days, district_code, limit)
+
     if not db_enabled():
         raise RuntimeError("Tracker database is not configured.")
-    days=max(1,min(int(days),7)); limit=max(1,min(int(limit),500))
     if level == "school":
         with db_connect() as conn:
             with conn.cursor() as cur:
@@ -1192,7 +1424,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v5", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.1", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -1242,7 +1474,9 @@ def schools():
 def official_history_status_route():
     try:
         status = official_archive_status()
-        status["officialWindowOpen"] = official_window_open()
+        status["officialWindowOpen"] = True
+        status["publicDistrictHistory"] = True
+        status["historicalDrilldown"] = "district-only"
         status["currentIst"] = datetime.now(IST).isoformat()
         return jsonify({"ok": True, "data": status})
     except Exception as e:
@@ -1277,8 +1511,8 @@ def official_history_trend_route():
         code = request.args.get("code")
         end_date = request.args.get("endDate")
         days = max(1, min(to_int(request.args.get("days", 7)) or 7, 7))
-        if level not in {"district", "block", "cluster"}:
-            return jsonify({"ok": False, "error": "trend level must be district, block or cluster"}), 400
+        if level != "district":
+            return jsonify({"ok": False, "error": "V6.1 official previous-report trend is currently available for districts."}), 400
         if not code or not end_date:
             return jsonify({"ok": False, "error": "code and endDate are required"}), 400
         end_dt = datetime.strptime(validate_report_date(end_date), "%d/%m/%Y")

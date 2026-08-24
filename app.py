@@ -6,6 +6,8 @@ import io
 import os
 import re
 import threading
+import json
+from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
@@ -24,6 +26,9 @@ HEADERS = {
 }
 TRACKER_LOCK = threading.Lock()
 SCHOOL_GAP_LOCK = threading.Lock()
+OFFICIAL_ARCHIVE_LOCK = threading.Lock()
+REPORTS_BASE = "https://mdmhp.nic.in/Reports"
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def get_html(path, params):
@@ -173,6 +178,423 @@ def parse_schools(district_code, block_code, cluster_code):
     return out
 
 
+
+# -------------------- OFFICIAL PREVIOUS REPORTS --------------------
+
+def validate_report_date(value):
+    try:
+        dt = datetime.strptime(str(value).strip(), "%d/%m/%Y")
+    except Exception:
+        raise ValueError("Date must be in DD/MM/YYYY format.")
+    today_ist = datetime.now(IST).date()
+    if dt.date() > today_ist:
+        raise ValueError("Future dates are not allowed.")
+    return dt.strftime("%d/%m/%Y")
+
+
+def official_window_open():
+    # The official portal makes backdated reports available after 5 PM.
+    # Before 5 PM we only serve pages already saved in our archive.
+    now = datetime.now(IST)
+    return now.hour >= 17
+
+
+def history_scope_key(level, district_code=None, block_code=None, cluster_code=None):
+    if level == "district":
+        return f"state:{STATE_CODE}"
+    if level == "block":
+        return f"district:{district_code or ''}"
+    if level == "cluster":
+        return f"block:{block_code or ''}"
+    if level == "school":
+        return f"cluster:{cluster_code or ''}"
+    raise ValueError("level must be district, block, cluster or school")
+
+
+def load_official_cache(report_date, level, district_code=None, block_code=None, cluster_code=None):
+    if not db_enabled():
+        return None
+    scope_key = history_scope_key(level, district_code, block_code, cluster_code)
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT payload_json,fetched_at,source_url
+                FROM official_history_cache
+                WHERE report_date=%s AND level=%s AND scope_key=%s
+            """, (report_date, level, scope_key))
+            row = cur.fetchone()
+    if not row:
+        return None
+    try:
+        payload = json.loads(row[0])
+    except Exception:
+        return None
+    payload["source"] = "archive"
+    payload["fetchedAt"] = row[1].isoformat()
+    payload["sourceUrl"] = row[2]
+    return payload
+
+
+def save_official_cache(report_date, level, payload, district_code=None, block_code=None, cluster_code=None, source_url=None):
+    if not db_enabled():
+        return
+    init_db()
+    scope_key = history_scope_key(level, district_code, block_code, cluster_code)
+    body = dict(payload)
+    body.pop("source", None)
+    body.pop("fetchedAt", None)
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO official_history_cache(
+                    report_date,level,scope_key,district_code,block_code,cluster_code,source_url,payload_json
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT(report_date,level,scope_key) DO UPDATE SET
+                    district_code=EXCLUDED.district_code,
+                    block_code=EXCLUDED.block_code,
+                    cluster_code=EXCLUDED.cluster_code,
+                    fetched_at=NOW(),
+                    source_url=EXCLUDED.source_url,
+                    payload_json=EXCLUDED.payload_json
+            """, (
+                report_date, level, scope_key, district_code, block_code, cluster_code,
+                source_url, json.dumps(body, ensure_ascii=False)
+            ))
+        conn.commit()
+
+
+def _history_session(report_date):
+    report_date = validate_report_date(report_date)
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    form_url = f"{REPORTS_BASE}/MDM"
+    r = s.get(form_url, timeout=40)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    token = soup.find("input", attrs={"name": "__RequestVerificationToken"})
+    if not token or not token.get("value"):
+        raise RuntimeError("Official report form token was not found.")
+    payload = {
+        "__RequestVerificationToken": token.get("value"),
+        "CDate": report_date,
+    }
+    r2 = s.post(
+        f"{REPORTS_BASE}/MDM/Submit",
+        data=payload,
+        headers={**HEADERS, "Referer": form_url},
+        timeout=50,
+        allow_redirects=True,
+    )
+    r2.raise_for_status()
+    # The selected date is stored in the official server session.
+    return s
+
+
+def _extract_href_code(tr, param_name):
+    for tag in tr.find_all(["a", "span", "td"]):
+        href = tag.get("href") if hasattr(tag, "get") else None
+        if href and param_name in href:
+            try:
+                qs = parse_qs(urlparse(href).query)
+                if qs.get(param_name):
+                    return qs[param_name][0]
+            except Exception:
+                pass
+        onclick = tag.get("onclick") if hasattr(tag, "get") else None
+        if onclick:
+            m = re.search(rf"{re.escape(param_name)}\s*=\s*['\\\"]?([0-9]+)", onclick)
+            if m:
+                return m.group(1)
+    return None
+
+
+def _extract_numeric_code_from_row(tr, min_digits=5):
+    text = " ".join([
+        str(tag.get("href") or "") + " " + str(tag.get("onclick") or "")
+        for tag in tr.find_all(["a", "span", "td"])
+    ])
+    nums = re.findall(rf"\b18\d{{{max(0,min_digits-2)},}}\b", text)
+    return nums[-1] if nums else None
+
+
+def parse_official_summary_html(html, level, district_code=None, block_code=None, cluster_code=None):
+    soup = BeautifulSoup(html, "html.parser")
+    rows = []
+    for tr in soup.select("table tbody tr"):
+        cells = clean_cells(tr)
+        if not cells:
+            continue
+
+        if level in {"district", "block", "cluster"}:
+            if len(cells) < 9:
+                continue
+            name = cells[1].strip()
+            if not name:
+                continue
+            if level == "district":
+                code = _extract_href_code(tr, "districtCode")
+            elif level == "block":
+                code = _extract_href_code(tr, "blockCode")
+            else:
+                code = _extract_href_code(tr, "clusterCode")
+            if not code:
+                code = _extract_numeric_code_from_row(tr, 5) or name
+            rows.append({
+                level: name,
+                f"{level}Code": str(code),
+                "totalSchools": to_int(cells[2]),
+                "monthlyReported": to_int(cells[3]),
+                "monthlyNotReported": to_int(cells[4]),
+                "enrolled": to_int(cells[5]),
+                "dailyReported": to_int(cells[6]),
+                "dailyNotReported": to_int(cells[7]),
+                "mealsServed": to_int(cells[8]),
+            })
+            continue
+
+        # Historical SchoolReports follows the same visible layout as the live school table:
+        # School, Shift, Monthly status, Enrolled, Daily status, Meals served.
+        if level == "school" and len(cells) >= 7:
+            school_name = cells[1].strip()
+            if not school_name:
+                continue
+            code = (
+                _extract_href_code(tr, "schoolCode")
+                or _extract_numeric_code_from_row(tr, 8)
+                or f"{cluster_code or 'cluster'}:{cells[2]}:{school_name}"
+            )
+            rows.append({
+                "school": school_name,
+                "schoolCode": str(code),
+                "shift": cells[2],
+                "monthlyStatus": cells[3],
+                "enrolled": to_int(cells[4]),
+                "dailyStatus": cells[5],
+                "mealsServed": to_int(cells[6]),
+            })
+
+    return rows
+
+
+def official_target(level, district_code=None, block_code=None, cluster_code=None):
+    if level == "district":
+        return f"{REPORTS_BASE}/DistrictReports", {"stateCode": STATE_CODE}
+    if level == "block":
+        if not district_code:
+            raise ValueError("districtCode is required for block reports.")
+        return f"{REPORTS_BASE}/BlockReports", {"stateCode": STATE_CODE, "districtCode": district_code}
+    if level == "cluster":
+        if not district_code or not block_code:
+            raise ValueError("districtCode and blockCode are required for cluster reports.")
+        return f"{REPORTS_BASE}/ClusterReports", {
+            "stateCode": STATE_CODE, "districtCode": district_code, "blockCode": block_code
+        }
+    if level == "school":
+        if not district_code or not block_code or not cluster_code:
+            raise ValueError("districtCode, blockCode and clusterCode are required for school reports.")
+        return f"{REPORTS_BASE}/SchoolReports", {
+            "stateCode": STATE_CODE, "districtCode": district_code,
+            "blockCode": block_code, "clusterCode": cluster_code
+        }
+    raise ValueError("level must be district, block, cluster or school")
+
+
+def fetch_official_history_page(report_date, level, district_code=None, block_code=None, cluster_code=None):
+    report_date = validate_report_date(report_date)
+    s = _history_session(report_date)
+    url, params = official_target(level, district_code, block_code, cluster_code)
+    r = s.get(url, params=params, timeout=50)
+    r.raise_for_status()
+
+    # If the source refuses the report/date, do not attempt to circumvent that restriction.
+    # We require an actual report table with parsed rows.
+    rows = parse_official_summary_html(r.text, level, district_code, block_code, cluster_code)
+    if not rows:
+        text = BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
+        short = re.sub(r"\s+", " ", text)[:240]
+        raise RuntimeError(
+            "Official historical report is not available for this page/date right now."
+            + (f" Source message: {short}" if short else "")
+        )
+
+    payload = {
+        "reportDate": report_date,
+        "level": level,
+        "rows": rows,
+        "source": "official",
+        "sourceUrl": r.url,
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    save_official_cache(
+        report_date, level, payload, district_code, block_code, cluster_code, r.url
+    )
+    return payload
+
+
+def get_official_history_page(report_date, level, district_code=None, block_code=None, cluster_code=None, refresh=False):
+    report_date = validate_report_date(report_date)
+    if not refresh:
+        cached = load_official_cache(report_date, level, district_code, block_code, cluster_code)
+        if cached:
+            return cached
+
+    if not official_window_open():
+        raise RuntimeError(
+            "This report is not in the dashboard archive yet. "
+            "The official backdated-report source is only queried after 5:00 PM IST. "
+            "Open/save this date after 5 PM once, then the archived copy is available any time."
+        )
+    return fetch_official_history_page(report_date, level, district_code, block_code, cluster_code)
+
+
+def official_history_trend(report_dates, level, entity_code, district_code=None, block_code=None, cluster_code=None):
+    points = []
+    for report_date in report_dates:
+        try:
+            page = get_official_history_page(
+                report_date, level, district_code, block_code, cluster_code
+            )
+            key = f"{level}Code"
+            row = next((x for x in page["rows"] if str(x.get(key)) == str(entity_code)), None)
+            if row:
+                total = to_int(row.get("totalSchools"))
+                reported = to_int(row.get("dailyReported"))
+                pending = to_int(row.get("dailyNotReported"))
+                meals = to_int(row.get("mealsServed"))
+                points.append({
+                    "date": report_date,
+                    "available": True,
+                    "reportingPct": round((reported / total * 100) if total else 0, 2),
+                    "totalSchools": total,
+                    "reported": reported,
+                    "pending": pending,
+                    "mealsServed": meals,
+                    "source": page.get("source", "official"),
+                })
+            else:
+                points.append({"date": report_date, "available": False})
+        except Exception as exc:
+            points.append({"date": report_date, "available": False, "error": str(exc)})
+    valid = [p for p in points if p.get("available")]
+    avg = round(sum(p["reportingPct"] for p in valid) / len(valid), 2) if valid else 0
+    worst = min(valid, key=lambda p: p["reportingPct"]) if valid else None
+    best = max(valid, key=lambda p: p["reportingPct"]) if valid else None
+    return {
+        "level": level,
+        "entityCode": entity_code,
+        "points": points,
+        "daysAvailable": len(valid),
+        "averageReportingPct": avg,
+        "worstDay": worst,
+        "bestDay": best,
+    }
+
+
+def archive_official_final(report_date=None, source="manual"):
+    if not db_enabled():
+        raise RuntimeError("Database is not configured.")
+    if not OFFICIAL_ARCHIVE_LOCK.acquire(blocking=False):
+        return {"skipped": True, "reason": "An official archive run is already in progress."}
+    started = datetime.now(timezone.utc)
+    try:
+        if report_date is None:
+            report_date = datetime.now(IST).strftime("%d/%m/%Y")
+        report_date = validate_report_date(report_date)
+        if not official_window_open():
+            raise RuntimeError("Official final archive runs only after 5:00 PM IST.")
+
+        # District page -> every block page -> every cluster page.
+        # School pages are archived only for clusters still showing pending schools.
+        district_page = get_official_history_page(report_date, "district", refresh=True)
+        district_pages = 1
+        block_pages = cluster_pages = school_pages = 0
+
+        for d in district_page["rows"]:
+            dc = d.get("districtCode")
+            if not dc:
+                continue
+            try:
+                block_page = get_official_history_page(report_date, "block", dc, refresh=True)
+                block_pages += 1
+            except Exception as exc:
+                print("Official block archive warning:", dc, exc, flush=True)
+                continue
+
+            for b in block_page["rows"]:
+                bc = b.get("blockCode")
+                if not bc:
+                    continue
+                try:
+                    cluster_page = get_official_history_page(report_date, "cluster", dc, bc, refresh=True)
+                    cluster_pages += 1
+                except Exception as exc:
+                    print("Official cluster archive warning:", bc, exc, flush=True)
+                    continue
+
+                for c in cluster_page["rows"]:
+                    # Full all-school daily crawling would create thousands of requests.
+                    # Cache school reports only where follow-up is actually needed.
+                    if to_int(c.get("dailyNotReported")) <= 0:
+                        continue
+                    cc = c.get("clusterCode")
+                    if not cc:
+                        continue
+                    try:
+                        get_official_history_page(report_date, "school", dc, bc, cc, refresh=True)
+                        school_pages += 1
+                    except Exception as exc:
+                        print("Official school archive warning:", cc, exc, flush=True)
+
+        duration = (datetime.now(timezone.utc) - started).total_seconds()
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO official_archive_runs(
+                        report_date,source,district_pages,block_pages,cluster_pages,school_pages,duration_seconds
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id,captured_at
+                """, (report_date, source, district_pages, block_pages, cluster_pages, school_pages, duration))
+                run_id, captured_at = cur.fetchone()
+            conn.commit()
+        return {
+            "skipped": False,
+            "runId": run_id,
+            "capturedAt": captured_at.isoformat(),
+            "reportDate": report_date,
+            "districtPages": district_pages,
+            "blockPages": block_pages,
+            "clusterPages": cluster_pages,
+            "schoolPages": school_pages,
+            "durationSeconds": round(duration, 2),
+        }
+    finally:
+        OFFICIAL_ARCHIVE_LOCK.release()
+
+
+def official_archive_status():
+    if not db_enabled():
+        return {"configured": False, "latest": None, "cachedPages": 0}
+    init_db()
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id,report_date,captured_at,source,district_pages,block_pages,cluster_pages,school_pages,duration_seconds
+                FROM official_archive_runs ORDER BY captured_at DESC LIMIT 1
+            """)
+            row = cur.fetchone()
+            cur.execute("SELECT COUNT(*) FROM official_history_cache")
+            cached = cur.fetchone()[0]
+    latest = None
+    if row:
+        latest = {
+            "id": row[0], "reportDate": row[1], "capturedAt": row[2].isoformat(),
+            "source": row[3], "districtPages": row[4], "blockPages": row[5],
+            "clusterPages": row[6], "schoolPages": row[7], "durationSeconds": float(row[8] or 0)
+        }
+    return {"configured": True, "latest": latest, "cachedPages": cached}
+
+
+
 # -------------------- DATABASE / TRACKER --------------------
 
 def db_enabled():
@@ -260,6 +682,34 @@ def init_db():
             cur.execute("CREATE INDEX IF NOT EXISTS ix_school_failures_date ON school_daily_failures(report_date)")
             cur.execute("CREATE INDEX IF NOT EXISTS ix_school_failures_school ON school_daily_failures(school_code)")
             cur.execute("CREATE INDEX IF NOT EXISTS ix_school_gap_runs_date ON school_gap_runs(report_date, captured_at DESC)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS official_history_cache (
+                    report_date TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    scope_key TEXT NOT NULL,
+                    district_code TEXT,
+                    block_code TEXT,
+                    cluster_code TEXT,
+                    fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    source_url TEXT,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY(report_date, level, scope_key)
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_official_history_date ON official_history_cache(report_date, level)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS official_archive_runs (
+                    id BIGSERIAL PRIMARY KEY,
+                    report_date TEXT NOT NULL,
+                    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    source TEXT NOT NULL DEFAULT 'manual',
+                    district_pages INTEGER NOT NULL DEFAULT 0,
+                    block_pages INTEGER NOT NULL DEFAULT 0,
+                    cluster_pages INTEGER NOT NULL DEFAULT 0,
+                    school_pages INTEGER NOT NULL DEFAULT 0,
+                    duration_seconds NUMERIC(10,2) NOT NULL DEFAULT 0
+                )
+            """)
         conn.commit()
 
 
@@ -783,6 +1233,75 @@ def schools():
         return jsonify({"ok": False, "error": "districtCode, blockCode and clusterCode required"}), 400
     try:
         return jsonify({"ok": True, "data": parse_schools(d, b, c)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
+
+
+
+@app.get("/api/official/history/status")
+def official_history_status_route():
+    try:
+        status = official_archive_status()
+        status["officialWindowOpen"] = official_window_open()
+        status["currentIst"] = datetime.now(IST).isoformat()
+        return jsonify({"ok": True, "data": status})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
+
+
+@app.get("/api/official/history/page")
+def official_history_page_route():
+    try:
+        date = request.args.get("date")
+        level = request.args.get("level", "district")
+        if not date:
+            return jsonify({"ok": False, "error": "date is required in DD/MM/YYYY format"}), 400
+        if level not in {"district", "block", "cluster", "school"}:
+            return jsonify({"ok": False, "error": "invalid level"}), 400
+        data = get_official_history_page(
+            date, level,
+            request.args.get("districtCode"),
+            request.args.get("blockCode"),
+            request.args.get("clusterCode"),
+            refresh=request.args.get("refresh") == "1",
+        )
+        return jsonify({"ok": True, "data": data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 409
+
+
+@app.get("/api/official/history/trend")
+def official_history_trend_route():
+    try:
+        level = request.args.get("level", "district")
+        code = request.args.get("code")
+        end_date = request.args.get("endDate")
+        days = max(1, min(to_int(request.args.get("days", 7)) or 7, 7))
+        if level not in {"district", "block", "cluster"}:
+            return jsonify({"ok": False, "error": "trend level must be district, block or cluster"}), 400
+        if not code or not end_date:
+            return jsonify({"ok": False, "error": "code and endDate are required"}), 400
+        end_dt = datetime.strptime(validate_report_date(end_date), "%d/%m/%Y")
+        dates = [(end_dt - timedelta(days=i)).strftime("%d/%m/%Y") for i in reversed(range(days))]
+        data = official_history_trend(
+            dates, level, code,
+            request.args.get("districtCode"),
+            request.args.get("blockCode"),
+            request.args.get("clusterCode"),
+        )
+        return jsonify({"ok": True, "data": data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
+
+
+@app.post("/api/official/archive/final")
+def official_archive_final_route():
+    try:
+        data = archive_official_final(
+            request.args.get("date"),
+            request.args.get("source", "manual")[:40]
+        )
+        return jsonify({"ok": True, "data": data})
     except Exception as e:
         return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 

@@ -39,18 +39,31 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 .history-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:18px}.history-note{font-size:11px;color:var(--muted);line-height:1.55;margin-top:10px}.status-text{font-weight:750;font-size:11px}.plain-compare{display:grid;gap:10px}.plain-row{display:grid;grid-template-columns:180px 1fr;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}.plain-row:last-child{border-bottom:0}.plain-row span{color:var(--muted);font-size:12px}.plain-row b{font-size:13px}.simple-note{padding:12px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:11px;line-height:1.55}.download-row{display:flex;gap:9px;flex-wrap:wrap}.btn.download{text-decoration:none;display:inline-block}
 @media(max-width:1050px){.insight-grid,.history-cards{grid-template-columns:repeat(2,1fr)}}@media(max-width:620px){.insight-grid,.history-cards{grid-template-columns:1fr}.plain-row{grid-template-columns:1fr;gap:4px}}
 
+
+/* V6 previous official reports */
+.prev-toolbar{display:grid;grid-template-columns:1.1fr 1fr auto auto;gap:12px;padding:17px 19px;align-items:end}
+.prev-source{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;border-radius:999px;padding:5px 9px;background:#eef4ff;color:var(--blue2)}
+.prev-source.archive{background:#edf9f0;color:var(--green)}
+.prev-breadcrumb{display:flex;gap:7px;flex-wrap:wrap}.prev-crumb{border:1px solid var(--line);background:#fff;color:var(--blue2);border-radius:8px;padding:7px 9px;font-size:10px;font-weight:800;cursor:pointer}
+.prev-trend-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.prev-trend-point{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfcff}
+.prev-trend-point b{display:block;font-size:13px}.prev-trend-point span{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+@media(max-width:900px){.prev-toolbar{grid-template-columns:1fr}.prev-trend-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.prev-trend-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics & 30m Tracker</p></div></div>
+ <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics, Tracker & Previous Reports</p></div></div>
  <nav>
   <button class="navbtn active" data-view="executive">Executive Dashboard</button>
   <button class="navbtn" data-view="drill">Drill-down</button>
   <button class="navbtn" data-view="meals">Meals Served</button>
   <button class="navbtn" data-view="tracker">30m Tracker</button>
   <button class="navbtn" data-view="history">3–7 Day Performance</button>
+  <button class="navbtn" data-view="previous">Previous Reports</button>
   <button class="navbtn" data-view="compare">Compare</button>
   <button class="navbtn" data-view="reports">Reports</button>
  </nav>
@@ -146,6 +159,54 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
  <section class="panel"><div class="phead"><div><h3 id="histTitle">Poor-performing Districts</h3><p id="histSub">Ranked by repeated incomplete reporting, then average reporting completion.</p></div><div class="download-row"><input id="histSearch" class="search" placeholder="Search..."><a id="histDownload" class="btn primary download" href="/api/report/poor.csv?days=7&level=district">Download Simple CSV</a></div></div><div class="tablewrap"><table><thead id="histHead"></thead><tbody id="histBody"></tbody></table></div></section>
 </section>
 
+
+<!-- PREVIOUS OFFICIAL REPORTS -->
+<section id="view-previous" class="view">
+ <section class="panel">
+  <div class="phead">
+   <div><h3>Previous Official Reports</h3><p>Open saved backdated reports any time. If a page is not archived yet, the dashboard only queries the official source after 5:00 PM IST.</p></div>
+   <div><span id="prevSource" class="prev-source">Not loaded</span></div>
+  </div>
+  <div class="prev-toolbar">
+   <div class="field"><label>Report Date</label><input id="prevDate" type="date"></div>
+   <div class="field"><label>3–7 Day Trend</label><select id="prevTrendDays"><option value="3">3 days</option><option value="5">5 days</option><option value="7" selected>7 days</option></select></div>
+   <button id="prevLoad" class="btn primary">Load Report</button>
+   <button id="prevReset" class="btn soft">Back to Districts</button>
+  </div>
+  <div class="pbody">
+   <div class="simple-note" id="prevAvailability">Saved pages are available from our database at any time. New official backdated pages are fetched only after 5 PM IST and then cached automatically.</div>
+  </div>
+ </section>
+
+ <div class="cards" style="grid-template-columns:repeat(4,1fr)">
+  <div class="card"><span>Current Scope</span><strong id="prevLevel">Districts</strong><small id="prevName">Assam</small></div>
+  <div class="card"><span>Total Schools</span><strong id="prevSchools">—</strong></div>
+  <div class="card"><span>Schools Still Pending</span><strong id="prevPending" class="red">—</strong></div>
+  <div class="card"><span>Meals Served</span><strong id="prevMeals">—</strong></div>
+ </div>
+
+ <section class="panel">
+  <div class="phead">
+   <div><h3 id="prevTitle">District Report</h3><p id="prevCrumb">Assam</p></div>
+   <div style="display:flex;gap:9px;flex-wrap:wrap"><input id="prevSearch" class="search" placeholder="Search..."></div>
+  </div>
+  <div class="pbody"><div id="prevBreadcrumb" class="prev-breadcrumb"></div></div>
+  <div class="tablewrap"><table><thead id="prevHead"></thead><tbody id="prevBody"></tbody></table></div>
+ </section>
+
+ <section class="panel">
+  <div class="phead">
+   <div><h3 id="prevTrendTitle">Official 3–7 Day Trend</h3><p id="prevTrendSub">Open a district, block or cluster to compare the same entity across previous report dates.</p></div>
+   <button id="prevTrendLoad" class="btn soft" disabled>Load Trend</button>
+  </div>
+  <div class="pbody">
+   <div id="prevTrendSummary" class="prev-trend-grid"><div class="empty">Select a district, block or cluster first.</div></div>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th>Date</th><th>Daily Reporting %</th><th>Reported</th><th>Pending</th><th>Meals Served</th><th>Source</th></tr></thead><tbody id="prevTrendBody"><tr><td colspan="6" class="empty">No trend loaded.</td></tr></tbody></table></div>
+ </section>
+</section>
+
+
 <!-- COMPARE -->
 <section id="view-compare" class="view">
  <section class="panel"><div class="phead"><div><h3>District Comparison</h3><p>Side-by-side operational comparison.</p></div></div><div class="filters" style="grid-template-columns:1fr 1fr"><div class="field"><label>District A</label><select id="cmpA"><option value="">Select district</option></select></div><div class="field"><label>District B</label><select id="cmpB"><option value="">Select district</option></select></div></div></section>
@@ -186,7 +247,7 @@ async function schools(dc,bc,cc,force=false){const k=dc+'|'+bc+'|'+cc;if(schoolC
 function setUpdated(){ $('#updated').textContent='Updated '+new Date().toLocaleTimeString('en-IN'); }
 function fill(el,rows,valKey,nameKey,placeholder){const old=el.value;el.innerHTML=`<option value="">${placeholder}</option>`+rows.map(r=>`<option value="${r[valKey]}">${r[nameKey]}</option>`).join('');if(rows.some(r=>String(r[valKey])===String(old)))el.value=old}
 function bindSearch(inp,body){$(inp).addEventListener('input',e=>{const q=e.target.value.toLowerCase();for(const tr of $(body).rows)tr.style.display=tr.innerText.toLowerCase().includes(q)?'':'none'})}
-function setView(v){activeView=v;$$('.view').forEach(x=>x.classList.remove('active'));$('#view-'+v).classList.add('active');$$('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));if(v==='executive')loadExecutive();if(v==='drill')initDrill();if(v==='meals')initMeals();if(v==='tracker')initTracker();if(v==='history')initHistory();if(v==='compare')initCompare()}
+function setView(v){activeView=v;$$('.view').forEach(x=>x.classList.remove('active'));$('#view-'+v).classList.add('active');$$('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));if(v==='executive')loadExecutive();if(v==='drill')initDrill();if(v==='meals')initMeals();if(v==='tracker')initTracker();if(v==='history')initHistory();if(v==='previous')initPrevious();if(v==='compare')initCompare()}
 $$('.navbtn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 
 // EXECUTIVE
@@ -239,6 +300,122 @@ function pendingSentence(a,b){if(a.dailyNotReported===b.dailyNotReported)return 
 async function renderCompare(){const ds=await districts(),a=ds.find(x=>String(x.districtCode)===String($('#cmpA').value)),b=ds.find(x=>String(x.districtCode)===String($('#cmpB').value));$('#cmpCardA').innerHTML=cmpCard(a);$('#cmpCardB').innerHTML=cmpCard(b);if(!a||!b){$('#cmpDelta').innerHTML='<div class="empty">Select both districts.</div>';return}const ar=pct(a.dailyReported,a.totalSchools),br=pct(b.dailyReported,b.totalSchools),am=a.dailyReported?a.mealsServed/a.dailyReported:0,bm=b.dailyReported?b.mealsServed/b.dailyReported:0;let reporting;if(Math.abs(ar-br)<.005)reporting=`Both districts have the same daily reporting completion: ${ar.toFixed(2)}%.`;else{const hi=ar>br?a:b,lo=ar>br?b:a;reporting=`${hi.district} has ${Math.abs(ar-br).toFixed(2)} percentage points higher daily reporting than ${lo.district}.`;}let meals;if(a.mealsServed===b.mealsServed)meals=`Both districts served the same number of meals: ${fmt(a.mealsServed)}.`;else{const hi=a.mealsServed>b.mealsServed?a:b,lo=hi===a?b:a;meals=`${hi.district} served ${fmt(Math.abs(a.mealsServed-b.mealsServed))} more meals than ${lo.district}.`;}let avg;if(Math.abs(am-bm)<.05)avg=`Average meals per reporting school are almost the same (${am.toFixed(1)} vs ${bm.toFixed(1)}).`;else{const hi=am>bm?a:b,lo=hi===a?b:a;avg=`${hi.district} has a higher average meals-per-reporting-school value by ${Math.abs(am-bm).toFixed(1)}. This is descriptive, not a performance score.`;}$('#cmpDelta').innerHTML=`<div class="plain-compare"><div class="plain-row"><span>School coverage</span><b>${sameOrMore(a.totalSchools,b.totalSchools,a.district,b.district,'schools')}</b></div><div class="plain-row"><span>Reported today</span><b>${sameOrMore(a.dailyReported,b.dailyReported,a.district,b.district,'reported schools')}</b></div><div class="plain-row"><span>Pending</span><b>${pendingSentence(a,b)}</b></div><div class="plain-row"><span>Reporting completion</span><b>${reporting}</b></div><div class="plain-row"><span>Meals served</span><b>${meals}</b></div><div class="plain-row"><span>Average meals</span><b>${avg}</b></div></div>`}
 $('#cmpA').addEventListener('change',renderCompare);$('#cmpB').addEventListener('change',renderCompare);
 
+
+// PREVIOUS OFFICIAL REPORTS
+let prevCtx={level:'district',districtCode:null,districtName:null,blockCode:null,blockName:null,clusterCode:null,clusterName:null,trendLevel:null,trendCode:null,trendName:null};
+
+function uiDateToReport(v){if(!v)return '';const [y,m,d]=v.split('-');return `${d}/${m}/${y}`}
+function reportToUiDate(v){if(!v)return '';const [d,m,y]=v.split('/');return `${y}-${m}-${d}`}
+function prevDefaultDate(){
+ const x=new Date(); x.setDate(x.getDate()-1);
+ const y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,'0'),d=String(x.getDate()).padStart(2,'0');
+ return `${y}-${m}-${d}`;
+}
+function prevScopeSummary(rows,level){
+ if(level==='school'){
+   return {schools:rows.length,pending:rows.filter(r=>String(r.dailyStatus).toLowerCase()!=='yes').length,meals:rows.reduce((a,r)=>a+(Number(r.mealsServed)||0),0)}
+ }
+ return {schools:rows.reduce((a,r)=>a+(Number(r.totalSchools)||0),0),pending:rows.reduce((a,r)=>a+(Number(r.dailyNotReported)||0),0),meals:rows.reduce((a,r)=>a+(Number(r.mealsServed)||0),0)}
+}
+function prevSetCards(rows,level,label,name){
+ const s=prevScopeSummary(rows,level);$('#prevLevel').textContent=label;$('#prevName').textContent=name||'Assam';$('#prevSchools').textContent=fmt(s.schools);$('#prevPending').textContent=fmt(s.pending);$('#prevMeals').textContent=fmt(s.meals);
+}
+function prevSourceBadge(source){
+ const el=$('#prevSource');el.className='prev-source'+(source==='archive'?' archive':'');el.textContent=source==='archive'?'Saved Archive':'Official Source';
+}
+function prevBreadcrumb(){
+ const b=[`<button class="prev-crumb" data-prev-level="district">Assam / Districts</button>`];
+ if(prevCtx.districtCode)b.push(`<button class="prev-crumb" data-prev-level="block">${prevCtx.districtName}</button>`);
+ if(prevCtx.blockCode)b.push(`<button class="prev-crumb" data-prev-level="cluster">${prevCtx.blockName}</button>`);
+ if(prevCtx.clusterCode)b.push(`<button class="prev-crumb" data-prev-level="school">${prevCtx.clusterName}</button>`);
+ $('#prevBreadcrumb').innerHTML=b.join('');
+}
+async function prevPage(level,opts={}){
+ const date=uiDateToReport($('#prevDate').value);if(!date)throw new Error('Select a report date.');
+ let url=`/api/official/history/page?date=${encodeURIComponent(date)}&level=${level}`;
+ const dc=opts.districtCode??prevCtx.districtCode,bc=opts.blockCode??prevCtx.blockCode,cc=opts.clusterCode??prevCtx.clusterCode;
+ if(dc)url+='&districtCode='+encodeURIComponent(dc);if(bc)url+='&blockCode='+encodeURIComponent(bc);if(cc)url+='&clusterCode='+encodeURIComponent(cc);
+ const j=await jget(url);return j.data;
+}
+function prevRenderSummary(data){
+ const rows=data.rows||[],level=data.level;prevSourceBadge(data.source);prevBreadcrumb();
+ if(level==='district'){
+  $('#prevTitle').textContent=`District Report — ${data.reportDate}`;$('#prevCrumb').textContent='Assam';
+  $('#prevHead').innerHTML='<tr><th>District</th><th>Total Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals Served</th></tr>';
+  $('#prevBody').innerHTML=rows.map(r=>`<tr><td><a class="link prev-row" data-level="district" data-code="${r.districtCode}" data-name="${r.district}">${r.district}</a></td><td>${fmt(r.totalSchools)}</td><td class="green">${fmt(r.dailyReported)}</td><td class="red">${fmt(r.dailyNotReported)}</td><td>${pct(r.dailyReported,r.totalSchools).toFixed(2)}%</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');
+  prevSetCards(rows,'district','Districts','Assam');
+ }else if(level==='block'){
+  $('#prevTitle').textContent=`Block Report — ${prevCtx.districtName}`;$('#prevCrumb').textContent=`Assam / ${prevCtx.districtName}`;
+  $('#prevHead').innerHTML='<tr><th>Block</th><th>Total Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals Served</th></tr>';
+  $('#prevBody').innerHTML=rows.map(r=>`<tr><td><a class="link prev-row" data-level="block" data-code="${r.blockCode}" data-name="${r.block}">${r.block}</a></td><td>${fmt(r.totalSchools)}</td><td class="green">${fmt(r.dailyReported)}</td><td class="red">${fmt(r.dailyNotReported)}</td><td>${pct(r.dailyReported,r.totalSchools).toFixed(2)}%</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');
+  prevSetCards(rows,'block','Blocks',prevCtx.districtName);
+ }else if(level==='cluster'){
+  $('#prevTitle').textContent=`Cluster Report — ${prevCtx.blockName}`;$('#prevCrumb').textContent=`Assam / ${prevCtx.districtName} / ${prevCtx.blockName}`;
+  $('#prevHead').innerHTML='<tr><th>Cluster</th><th>Total Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals Served</th></tr>';
+  $('#prevBody').innerHTML=rows.map(r=>`<tr><td><a class="link prev-row" data-level="cluster" data-code="${r.clusterCode}" data-name="${r.cluster}">${r.cluster}</a></td><td>${fmt(r.totalSchools)}</td><td class="green">${fmt(r.dailyReported)}</td><td class="red">${fmt(r.dailyNotReported)}</td><td>${pct(r.dailyReported,r.totalSchools).toFixed(2)}%</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');
+  prevSetCards(rows,'cluster','Clusters',prevCtx.blockName);
+ }else{
+  $('#prevTitle').textContent=`School Report — ${prevCtx.clusterName}`;$('#prevCrumb').textContent=`Assam / ${prevCtx.districtName} / ${prevCtx.blockName} / ${prevCtx.clusterName}`;
+  $('#prevHead').innerHTML='<tr><th>School</th><th>School Code</th><th>Shift</th><th>Monthly Status</th><th>Enrolled</th><th>Daily Status</th><th>Meals Served</th></tr>';
+  $('#prevBody').innerHTML=rows.map(r=>`<tr><td>${r.school}</td><td>${r.schoolCode}</td><td>${r.shift}</td><td>${r.monthlyStatus}</td><td>${fmt(r.enrolled)}</td><td class="${String(r.dailyStatus).toLowerCase()==='yes'?'green':'red'}">${r.dailyStatus}</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');
+  prevSetCards(rows,'school','Schools',prevCtx.clusterName);
+ }
+ if(!rows.length)$('#prevBody').innerHTML='<tr><td colspan="7" class="empty">No rows found for this report.</td></tr>';
+}
+function prevTrendTarget(level,code,name){
+ prevCtx.trendLevel=level;prevCtx.trendCode=code;prevCtx.trendName=name;$('#prevTrendLoad').disabled=!code;
+ $('#prevTrendTitle').textContent=code?`Official 3–7 Day Trend — ${name}`:'Official 3–7 Day Trend';
+ $('#prevTrendSub').textContent=code?'Uses saved archive first; missing pages are fetched from the official source only when its after-5-PM window is open.':'Open a district, block or cluster first.';
+}
+async function initPrevious(force=false){
+ try{
+  if(!$('#prevDate').value)$('#prevDate').value=prevDefaultDate();
+  const st=await jget('/api/official/history/status');
+  const x=st.data;
+  $('#prevAvailability').textContent=x.officialWindowOpen
+   ?`Official backdated-report window is open now. ${fmt(x.cachedPages)} report pages are already saved in the dashboard archive.`
+   :`Official backdated-report window is currently closed. ${fmt(x.cachedPages)} saved report pages remain available from the dashboard archive.`;
+  if(force||!$('#prevBody').children.length)await prevLoadDistricts();
+ }catch(e){notice(e.message)}
+}
+async function prevLoadDistricts(){
+ prevCtx={level:'district',districtCode:null,districtName:null,blockCode:null,blockName:null,clusterCode:null,clusterName:null,trendLevel:null,trendCode:null,trendName:null};
+ prevTrendTarget(null,null,null);const data=await prevPage('district');prevRenderSummary(data);
+}
+async function prevLoadBlocks(code,name){
+ prevCtx.level='block';prevCtx.districtCode=code;prevCtx.districtName=name;prevCtx.blockCode=null;prevCtx.blockName=null;prevCtx.clusterCode=null;prevCtx.clusterName=null;
+ prevTrendTarget('district',code,name);const data=await prevPage('block',{districtCode:code});prevRenderSummary(data);
+}
+async function prevLoadClusters(code,name){
+ prevCtx.level='cluster';prevCtx.blockCode=code;prevCtx.blockName=name;prevCtx.clusterCode=null;prevCtx.clusterName=null;
+ prevTrendTarget('block',code,name);const data=await prevPage('cluster',{districtCode:prevCtx.districtCode,blockCode:code});prevRenderSummary(data);
+}
+async function prevLoadSchools(code,name){
+ prevCtx.level='school';prevCtx.clusterCode=code;prevCtx.clusterName=name;
+ prevTrendTarget('cluster',code,name);const data=await prevPage('school',{districtCode:prevCtx.districtCode,blockCode:prevCtx.blockCode,clusterCode:code});prevRenderSummary(data);
+}
+$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district')await prevLoadBlocks(a.dataset.code,a.dataset.name);else if(a.dataset.level==='block')await prevLoadClusters(a.dataset.code,a.dataset.name);else if(a.dataset.level==='cluster')await prevLoadSchools(a.dataset.code,a.dataset.name)}catch(err){notice(err.message)}});
+$('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{const l=b.dataset.prevLevel;if(l==='district')await prevLoadDistricts();else if(l==='block')await prevLoadBlocks(prevCtx.districtCode,prevCtx.districtName);else if(l==='cluster')await prevLoadClusters(prevCtx.blockCode,prevCtx.blockName);else if(l==='school')await prevLoadSchools(prevCtx.clusterCode,prevCtx.clusterName)}catch(err){notice(err.message)}});
+$('#prevLoad').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
+$('#prevReset').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
+$('#prevDate').addEventListener('change',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
+bindSearch('#prevSearch','#prevBody');
+
+$('#prevTrendLoad').addEventListener('click',async()=>{
+ try{
+  if(!prevCtx.trendCode)return;
+  const endDate=uiDateToReport($('#prevDate').value),days=$('#prevTrendDays').value;
+  let url=`/api/official/history/trend?days=${days}&level=${prevCtx.trendLevel}&code=${encodeURIComponent(prevCtx.trendCode)}&endDate=${encodeURIComponent(endDate)}`;
+  if(prevCtx.trendLevel==='block')url+='&districtCode='+encodeURIComponent(prevCtx.districtCode);
+  if(prevCtx.trendLevel==='cluster')url+='&districtCode='+encodeURIComponent(prevCtx.districtCode)+'&blockCode='+encodeURIComponent(prevCtx.blockCode);
+  const j=await jget(url),x=j.data;
+  const valid=x.points.filter(p=>p.available);
+  $('#prevTrendSummary').innerHTML=`<div class="prev-trend-point"><b>${x.daysAvailable} days</b><span>Official days available</span></div><div class="prev-trend-point"><b>${x.averageReportingPct.toFixed(2)}%</b><span>Average daily reporting</span></div><div class="prev-trend-point"><b>${x.bestDay?x.bestDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Best day ${x.bestDay?'• '+x.bestDay.date:''}</span></div><div class="prev-trend-point"><b>${x.worstDay?x.worstDay.reportingPct.toFixed(2)+'%':'—'}</b><span>Lowest day ${x.worstDay?'• '+x.worstDay.date:''}</span></div>`;
+  $('#prevTrendBody').innerHTML=x.points.map(p=>p.available?`<tr><td>${p.date}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='archive'?'Saved Archive':'Official Source'}</td></tr>`:`<tr><td>${p.date}</td><td colspan="5" class="empty">Not available / not archived</td></tr>`).join('');
+ }catch(e){notice(e.message)}
+});
+
+
 // SMART INSIGHTS
 async function loadSmartInsights(){try{const j=await jget('/api/analytics/insights'),items=j.data.items||[];$('#smartInsights').innerHTML=items.length?items.map(x=>`<div class="insight ${x.kind}"><b>${x.title}</b><p>${x.text}</p></div>`).join(''):'<div class="empty">Take at least two tracker snapshots to generate automatic insights.</div>'}catch(e){$('#smartInsights').innerHTML='<div class="empty">Tracker insights are not available yet.</div>'}}
 
@@ -251,7 +428,7 @@ $('#histDays').addEventListener('change',loadHistory);$('#histLevel').addEventLi
 $('#schoolGapNow').addEventListener('click',async()=>{try{$('#schoolGapNow').disabled=true;notice('Capturing today’s schools that are still not reported. Only incomplete clusters are opened, so this is lighter than crawling every school.','info');const j=await jget('/api/history/school-gaps/run?source=dashboard',{method:'POST'});notice(`School gap capture saved: ${j.data.gapSchools} schools still not reported across ${j.data.incompleteClusters} incomplete clusters.`,'info');await historyStatus();if($('#histLevel').value==='school')await loadHistory()}catch(e){notice(e.message)}finally{$('#schoolGapNow').disabled=false}});
 
 $('#reportSnapshot').addEventListener('click',()=>setView('tracker'));
-$('#refresh').addEventListener('click',async()=>{try{districtCache=null;blockCache.clear();clusterCache.clear();schoolCache.clear();if(activeView==='executive')await loadExecutive(true);else if(activeView==='drill')await initDrill();else if(activeView==='meals')await initMeals();else if(activeView==='tracker')await initTracker();else if(activeView==='history')await initHistory();else if(activeView==='compare')await initCompare();setUpdated()}catch(e){notice(e.message)}});
+$('#refresh').addEventListener('click',async()=>{try{districtCache=null;blockCache.clear();clusterCache.clear();schoolCache.clear();if(activeView==='executive')await loadExecutive(true);else if(activeView==='drill')await initDrill();else if(activeView==='meals')await initMeals();else if(activeView==='tracker')await initTracker();else if(activeView==='history')await initHistory();else if(activeView==='previous')await initPrevious(true);else if(activeView==='compare')await initCompare();setUpdated()}catch(e){notice(e.message)}});
 
 (async()=>{await loadExecutive();})();
 </script>

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: assam-mdm-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    healthCheckPath: /healthz
+    autoDeploy: true

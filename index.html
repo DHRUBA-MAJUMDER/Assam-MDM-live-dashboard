@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Assam MDM Live Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">MDM</div>
+      <div><h1>Assam MDM</h1><p>Live Monitor</p></div>
+    </div>
+    <nav>
+      <button class="nav-item active" data-view="districts">District Overview</button>
+      <button class="nav-item" data-view="drilldown">Drill-down</button>
+    </nav>
+    <div class="sidebar-note">Live data is read from public MDMHP summary endpoints.</div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ASSAM • STATE CODE 18</p>
+        <h2>Meal Served Reporting Dashboard</h2>
+      </div>
+      <div class="actions">
+        <span id="lastUpdated">Not refreshed yet</span>
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </header>
+
+    <section class="stats" id="stats">
+      <div class="stat"><span>Total Schools</span><strong id="sTotal">—</strong></div>
+      <div class="stat"><span>Daily Reported</span><strong id="sReported">—</strong></div>
+      <div class="stat danger"><span>Not Reported</span><strong id="sPending">—</strong></div>
+      <div class="stat"><span>Meals Served</span><strong id="sMeals">—</strong></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h3 id="panelTitle">District Overview</h3>
+          <p id="breadcrumb">Assam</p>
+        </div>
+        <input id="search" type="search" placeholder="Search district...">
+      </div>
+      <div id="loader" class="loader hidden">Loading live data…</div>
+      <div class="table-wrap">
+        <table>
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

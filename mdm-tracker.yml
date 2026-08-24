@@ -2,7 +2,8 @@ name: MDM 30-minute Tracker
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # 05:30 AM to 09:00 PM IST (00:00 to 15:30 UTC), every 30 minutes.
+    - cron: '0,30 0-15 * * *'
   workflow_dispatch:
 
 permissions:

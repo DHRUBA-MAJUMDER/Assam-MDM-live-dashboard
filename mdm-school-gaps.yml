@@ -1,0 +1,23 @@
+name: MDM Daily School Gap Capture
+
+on:
+  schedule:
+    # 07:00 PM IST = 01:30 PM UTC. Captures end-of-day schools still not reported.
+    - cron: '30 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  school-gaps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture schools still not reported
+        run: |
+          echo "Capturing daily MDM school gaps..."
+          curl --fail --show-error --silent \
+            --retry 3 --retry-delay 20 \
+            --max-time 1200 \
+            -X POST \
+            "https://assam-mdm-dashboard.onrender.com/api/history/school-gaps/run?source=github-actions"

@@ -3,513 +3,204 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Assam MDM Live Dashboard</title>
+<title>Assam MDM Analytics</title>
 <style>
 :root{
-  --bg:#f4f7fb;--card:#fff;--text:#152033;--muted:#6c788c;--line:#e5eaf1;
-  --accent:#2457d6;--accent2:#173f9e;--danger:#d64949;--good:#15803d;
-  --warn:#b7791f;--nav:#0f1f3d;--nav2:#1a315c;
+ --bg:#f4f7fb;--card:#fff;--text:#152033;--muted:#6c788c;--line:#e4eaf2;
+ --blue:#2457d6;--blue2:#173f9e;--nav:#0f1f3d;--nav2:#1b345f;
+ --green:#15803d;--red:#d64545;--amber:#a16207;--purple:#6d45c6;
 }
-*{box-sizing:border-box}
-body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
-button,input,select{font:inherit}
-.app-shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-.sidebar{background:var(--nav);color:#fff;padding:26px 18px;display:flex;flex-direction:column}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:32px}
-.logo{width:48px;height:48px;border-radius:14px;background:#fff;color:#173f9e;display:grid;place-items:center;font-weight:800}
-.brand h1{font-size:18px;margin:0}.brand p{margin:3px 0 0;color:#aebbd3;font-size:12px}
-nav{display:grid;gap:8px}
-.nav-item{border:0;background:transparent;color:#c8d3e8;padding:12px 14px;text-align:left;border-radius:10px;font-weight:600;cursor:pointer}
-.nav-item.active,.nav-item:hover{background:var(--nav2);color:#fff}
-.sidebar-note{margin-top:auto;color:#9fb0cb;font-size:12px;line-height:1.5}
-main{padding:28px;min-width:0}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:24px}
-.eyebrow{font-size:11px;font-weight:800;letter-spacing:.15em;color:var(--accent);margin:0 0 7px}
-.topbar h2{margin:0;font-size:26px}
-.actions{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px}
-.primary-btn,.secondary-btn{border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
-.primary-btn{background:var(--accent);color:#fff}.secondary-btn{background:#edf2ff;color:var(--accent2)}
-.view{display:none}.view.active{display:block}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
-.stat span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
-.stat strong{font-size:28px;overflow-wrap:anywhere}
-.stat.danger strong{color:var(--danger)}
-.stat .sub{font-size:11px;color:var(--muted);margin-top:7px}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:20px}
-.panel-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;align-items:center}
-.panel-head h3{margin:0 0 5px}.panel-head p{margin:0;color:var(--muted);font-size:12px}
-.search{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:240px;background:#fff}
-.table-wrap{overflow:auto}
-table{width:100%;border-collapse:collapse;min-width:900px}
-th,td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
-th{background:#f8fafc;color:#516077;font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;z-index:1}
-tbody tr:hover{background:#f8fbff}
-.link{color:var(--accent);font-weight:700;cursor:pointer;text-decoration:none}
-.good{color:var(--good);font-weight:700}.bad{color:var(--danger);font-weight:700}
-.loader{padding:14px 20px;background:#eef4ff;color:var(--accent2);font-weight:700}
-.hidden{display:none!important}
-.error{display:none;margin-bottom:16px;padding:12px 14px;border:1px solid #f3c4c4;background:#fff2f2;color:#9f2020;border-radius:12px;font-size:13px}
-.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:18px 20px}
-.field label{display:block;font-size:11px;font-weight:800;color:#5a687d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
-.field select{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;color:var(--text)}
-.field select:disabled{background:#f3f5f8;color:#98a2b3}
-.hint{padding:0 20px 18px;color:var(--muted);font-size:12px}
-.meal-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
-.meal-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
-.meal-card .scope{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
-.meal-card .name{font-size:14px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meal-card .value{font-size:27px;font-weight:800;margin-top:12px}
-.meal-card .share{font-size:11px;color:var(--muted);margin-top:7px}
-.bar{height:8px;background:#edf1f6;border-radius:999px;overflow:hidden;min-width:120px}
-.bar span{display:block;height:100%;background:var(--accent);border-radius:999px}
-.rank-cell{display:flex;align-items:center;gap:10px;min-width:220px}
-.rank-num{width:22px;color:var(--muted);font-size:11px}
-.breadcrumb-btns{display:flex;gap:8px;flex-wrap:wrap}
-.crumb-btn{border:1px solid var(--line);background:#fff;padding:7px 10px;border-radius:8px;color:var(--accent2);cursor:pointer;font-size:12px;font-weight:700}
-.empty{padding:28px;text-align:center;color:var(--muted)}
-@media(max-width:1050px){.meal-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:900px){
-  .app-shell{grid-template-columns:1fr}.sidebar{display:none}main{padding:16px}
-  .stats,.meal-grid{grid-template-columns:repeat(2,1fr)}
-  .topbar{align-items:flex-start;flex-direction:column}.panel-head{align-items:stretch;flex-direction:column}
-  .search{min-width:0;width:100%}.filters{grid-template-columns:1fr}
-}
-@media(max-width:520px){.stats,.meal-grid{grid-template-columns:1fr}.topbar h2{font-size:22px}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}
+button,input,select{font:inherit}.shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.sidebar{background:var(--nav);color:#fff;padding:24px 18px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:12px;align-items:center;margin-bottom:26px}.logo{width:48px;height:48px;border-radius:14px;background:#fff;color:var(--blue2);display:grid;place-items:center;font-weight:900}.brand h1{font-size:18px;margin:0}.brand p{font-size:12px;color:#9fb0cb;margin:4px 0 0}
+nav{display:grid;gap:7px}.navbtn{border:0;background:transparent;color:#c8d3e8;padding:12px 14px;border-radius:10px;text-align:left;font-weight:650;cursor:pointer}.navbtn:hover,.navbtn.active{background:var(--nav2);color:#fff}.side-note{margin-top:auto;font-size:11px;line-height:1.55;color:#95a8c7}
+main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:22px}.eyebrow{color:var(--blue);font-size:11px;font-weight:900;letter-spacing:.15em;margin-bottom:6px}.top h2{margin:0;font-size:27px}.topright{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;flex-wrap:wrap;justify-content:flex-end}
+.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:750;cursor:pointer}.btn.primary{background:var(--blue);color:#fff}.btn.soft{background:#edf2ff;color:var(--blue2)}.btn.warn{background:#fff1dc;color:#8a4b00}.btn:disabled{opacity:.5;cursor:not-allowed}
+.notice{display:none;padding:12px 14px;border-radius:12px;margin-bottom:15px;font-size:13px}.notice.err{display:block;background:#fff1f1;color:#972525;border:1px solid #f0caca}.notice.info{display:block;background:#eef4ff;color:#173f9e;border:1px solid #ccd9fb}.loader{display:none;background:#eef4ff;color:#173f9e;padding:11px 14px;border-radius:10px;margin-bottom:14px;font-weight:700;font-size:13px}.loader.show{display:block}
+.view{display:none}.view.active{display:block}.cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;margin-bottom:18px}.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:17px;min-width:0}.card span{font-size:11px;color:var(--muted);display:block;margin-bottom:8px}.card strong{font-size:26px;line-height:1.1;display:block;overflow-wrap:anywhere}.card small{display:block;color:var(--muted);font-size:11px;margin-top:7px}.red{color:var(--red)!important}.green{color:var(--green)!important}.amber{color:var(--amber)!important}.purple{color:var(--purple)!important}
+.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.panel{background:#fff;border:1px solid var(--line);border-radius:17px;overflow:hidden;margin-bottom:17px}.phead{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:17px 19px;border-bottom:1px solid var(--line)}.phead h3{margin:0 0 5px;font-size:17px}.phead p{margin:0;color:var(--muted);font-size:11px}.pbody{padding:16px 19px}.search{border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-width:210px;background:#fff}
+.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:820px}th,td{padding:11px 13px;border-bottom:1px solid var(--line);font-size:12px;text-align:left;vertical-align:middle}th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;background:#f8fafc;color:#526078;position:sticky;top:0;z-index:1}tbody tr:hover{background:#f8fbff}.link{color:var(--blue);font-weight:750;cursor:pointer;text-decoration:none}.pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800}.pill.good{background:#eaf8ef;color:var(--green)}.pill.bad{background:#fff0f0;color:var(--red)}.pill.stable{background:#f0f3f7;color:#667085}.pill.base{background:#eef4ff;color:var(--blue2)}
+.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;padding:17px 19px}.field label{display:block;font-size:10px;color:#58667b;font-weight:850;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}.field select,.field input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}.field select:disabled{background:#f1f4f7;color:#98a2b3}
+.rankrow{display:grid;grid-template-columns:32px minmax(120px,1fr) 90px 1fr;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}.bar{height:8px;background:#edf1f6;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:var(--blue);border-radius:999px}.alertrow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}.alerticon{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;background:#fff0f0;color:var(--red);font-weight:900;flex:0 0 auto}.alertrow b{font-size:12px}.alertrow p{font-size:11px;color:var(--muted);margin:3px 0 0}
+.heatgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.heat{padding:10px;border-radius:11px;border:1px solid var(--line);font-size:11px;cursor:pointer}.heat b{display:block;margin-bottom:5px}.heat.good{background:#edf9f0;border-color:#cfead6}.heat.mid{background:#fff7e8;border-color:#f0dcb1}.heat.low{background:#fff0f0;border-color:#f0caca}.legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:var(--muted)}.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px}.dot.g{background:#78c58b}.dot.a{background:#e5bd5e}.dot.r{background:#e18484}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.mini{border:1px solid var(--line);border-radius:13px;padding:14px}.mini span{display:block;color:var(--muted);font-size:10px}.mini strong{font-size:21px;margin-top:7px;display:block}
+.tracker-top{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}.trackbox{background:#fff;border:1px solid var(--line);border-radius:15px;padding:15px}.trackbox span{display:block;color:var(--muted);font-size:10px}.trackbox b{display:block;margin-top:7px;font-size:15px}.trackbox small{display:block;margin-top:5px;color:var(--muted);font-size:10px}
+.chartwrap{padding:12px 0 2px}.chart{width:100%;height:230px;background:linear-gradient(to bottom,#fbfcfe,#fff);border:1px solid var(--line);border-radius:12px}.chart text{font-size:9px;fill:#738096}.chart .grid{stroke:#e9edf3;stroke-width:1}.chart .line{fill:none;stroke:var(--blue);stroke-width:3}.chart .point{fill:#fff;stroke:var(--blue);stroke-width:2}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.compare-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px}.compare-card h3{margin:0 0 14px}.compare-line{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}.compare-line span{color:var(--muted)}.delta-table{width:100%;min-width:0}
+.report-actions{display:flex;gap:12px;flex-wrap:wrap}.download{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.empty{padding:28px;text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:1150px){.cards{grid-template-columns:repeat(3,1fr)}.heatgrid{grid-template-columns:repeat(4,1fr)}.grid2{grid-template-columns:1fr}.tracker-top{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.sidebar{display:none}main{padding:15px}.top{flex-direction:column}.cards{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:1fr}.heatgrid{grid-template-columns:repeat(3,1fr)}.compare-grid{grid-template-columns:1fr}.phead{align-items:stretch;flex-direction:column}.search{min-width:0;width:100%}}
+@media(max-width:520px){.cards,.tracker-top,.kpis{grid-template-columns:1fr}.heatgrid{grid-template-columns:repeat(2,1fr)}.top h2{font-size:22px}}
 </style>
 </head>
 <body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="logo">MDM</div>
-      <div><h1>Assam MDM</h1><p>Live Monitor</p></div>
-    </div>
-    <nav>
-      <button class="nav-item active" data-view="overview">District Overview</button>
-      <button class="nav-item" data-view="drilldown">Drill-down</button>
-      <button class="nav-item" data-view="meals">Meals Served</button>
-    </nav>
-    <div class="sidebar-note">Live operational data is read from public MDMHP summary endpoints.</div>
-  </aside>
+<div class="shell">
+<aside class="sidebar">
+ <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics & 30m Tracker</p></div></div>
+ <nav>
+  <button class="navbtn active" data-view="executive">Executive Dashboard</button>
+  <button class="navbtn" data-view="drill">Drill-down</button>
+  <button class="navbtn" data-view="meals">Meals Served</button>
+  <button class="navbtn" data-view="tracker">30m Tracker</button>
+  <button class="navbtn" data-view="compare">Compare</button>
+  <button class="navbtn" data-view="reports">Reports</button>
+ </nav>
+ <div class="side-note">Operational summary data only. Tracker stores district, block and cluster snapshots; school contact/mobile information is not collected.</div>
+</aside>
+<main>
+<header class="top">
+ <div><div class="eyebrow">ASSAM • STATE CODE 18 • LIVE MDMHP</div><h2>Meal Served Reporting Analytics</h2></div>
+ <div class="topright"><span id="reportDate">Report date: —</span><span id="updated">Not refreshed yet</span><button id="refresh" class="btn primary">Refresh</button></div>
+</header>
+<div id="notice" class="notice"></div><div id="loader" class="loader">Loading live data…</div>
 
-  <main>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">ASSAM • STATE CODE 18</p>
-        <h2>Meal Served Reporting Dashboard</h2>
-      </div>
-      <div class="actions">
-        <span id="lastUpdated">Not refreshed yet</span>
-        <button id="refreshBtn" class="primary-btn">Refresh</button>
-      </div>
-    </header>
+<!-- EXECUTIVE -->
+<section id="view-executive" class="view active">
+ <div class="cards">
+  <div class="card"><span>Total Schools</span><strong id="xTotal">—</strong></div>
+  <div class="card"><span>Daily Reported</span><strong id="xReported">—</strong><small id="xPct">—</small></div>
+  <div class="card"><span>Daily Pending</span><strong class="red" id="xPending">—</strong></div>
+  <div class="card"><span>100% Districts</span><strong class="green" id="xComplete">—</strong><small id="xCompleteSub">—</small></div>
+  <div class="card"><span>Meals Served</span><strong id="xMeals">—</strong></div>
+ </div>
+ <div class="grid2">
+  <section class="panel"><div class="phead"><div><h3>Needs Attention</h3><p>Low reporting / high pending districts are surfaced automatically.</p></div></div><div class="pbody" id="attention"></div></section>
+  <section class="panel"><div class="phead"><div><h3>Reporting Ranking</h3><p>Bottom districts first — useful for follow-up.</p></div></div><div class="pbody" id="reportRank"></div></section>
+ </div>
+ <section class="panel"><div class="phead"><div><h3>District Reporting Heat Grid</h3><p>Green ≥99%, amber 95–98.99%, red &lt;95%. This is a performance grid, not a geographic map.</p></div></div><div class="pbody"><div class="heatgrid" id="heatgrid"></div><div class="legend"><span><i class="dot g"></i>≥99%</span><span><i class="dot a"></i>95–98.99%</span><span><i class="dot r"></i>&lt;95%</span></div></div></section>
+ <section class="panel"><div class="phead"><div><h3>District Overview</h3><p>Derived analytics include reporting %, meals/reporting-school, and meals as % of reported enrollment.</p></div><input id="execSearch" class="search" placeholder="Search district..."></div><div class="tablewrap"><table><thead><tr><th>District</th><th>Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals</th><th>Meals / reporting school</th><th>Meals % of reported enrollment*</th></tr></thead><tbody id="execBody"></tbody></table></div><div class="pbody" style="font-size:10px;color:var(--muted)">* This ratio is not labelled as attendance; it is only meals served divided by the enrollment value currently reported by the source.</div></section>
+</section>
 
-    <div id="errorBox" class="error"></div>
-    <div id="globalLoader" class="loader hidden">Loading live data…</div>
+<!-- DRILL -->
+<section id="view-drill" class="view">
+ <section class="panel"><div class="phead"><div><h3>Drill-down Explorer</h3><p>District → Block → Cluster → School</p></div><button id="drillReset" class="btn soft">Reset</button></div><div class="filters">
+  <div class="field"><label>District</label><select id="drillDistrict"><option value="">Select district</option></select></div>
+  <div class="field"><label>Block</label><select id="drillBlock" disabled><option value="">Select block</option></select></div>
+  <div class="field"><label>Cluster</label><select id="drillCluster" disabled><option value="">Select cluster</option></select></div>
+ </div></section>
+ <div class="cards" style="grid-template-columns:repeat(4,1fr)"><div class="card"><span>Current Level</span><strong id="dLevel">Assam</strong><small id="dName">All districts</small></div><div class="card"><span>Total Schools</span><strong id="dSchools">—</strong></div><div class="card"><span>Reporting %</span><strong id="dPct">—</strong></div><div class="card"><span>Meals Served</span><strong id="dMeals">—</strong></div></div>
+ <section class="panel"><div class="phead"><div><h3 id="drillTitle">Districts</h3><p id="drillCrumb">Assam</p></div><input id="drillSearch" class="search" placeholder="Search..."></div><div class="tablewrap"><table><thead id="drillHead"></thead><tbody id="drillBody"></tbody></table></div></section>
+</section>
 
-    <!-- DISTRICT OVERVIEW -->
-    <section id="view-overview" class="view active">
-      <section class="stats">
-        <div class="stat"><span>Total Schools</span><strong id="oTotal">—</strong></div>
-        <div class="stat"><span>Daily Reported</span><strong id="oReported">—</strong></div>
-        <div class="stat danger"><span>Not Reported</span><strong id="oPending">—</strong></div>
-        <div class="stat"><span>Meals Served</span><strong id="oMeals">—</strong></div>
-      </section>
+<!-- MEALS -->
+<section id="view-meals" class="view">
+ <section class="panel"><div class="phead"><div><h3>Meals Served Contribution Analysis</h3><p>Assam → District → Block → Cluster → School contribution.</p></div><button id="mealReset" class="btn soft">Reset</button></div><div class="filters">
+  <div class="field"><label>District</label><select id="mealDistrict"><option value="">All Assam</option></select></div>
+  <div class="field"><label>Block</label><select id="mealBlock" disabled><option value="">All blocks</option></select></div>
+  <div class="field"><label>Cluster</label><select id="mealCluster" disabled><option value="">All clusters</option></select></div>
+ </div></section>
+ <div class="cards" style="grid-template-columns:repeat(4,1fr)">
+  <div class="card"><span>Assam</span><strong id="mAssam">—</strong><small>Total meals</small></div>
+  <div class="card"><span id="mDLabel">District</span><strong id="mDistrict">—</strong><small id="mDShare">Select district</small></div>
+  <div class="card"><span id="mBLabel">Block</span><strong id="mBlock">—</strong><small id="mBShare">Select block</small></div>
+  <div class="card"><span id="mCLabel">Cluster</span><strong id="mCluster">—</strong><small id="mCShare">Select cluster</small></div>
+ </div>
+ <section class="panel"><div class="phead"><div><h3 id="mealTitle">District-wise Meals Served</h3><p id="mealSub">Share of Assam total</p></div><input id="mealSearch" class="search" placeholder="Search..."></div><div class="tablewrap"><table><thead><tr><th>Rank</th><th id="mealEntityHead">District</th><th>Meals Served</th><th>Share</th><th>Distribution</th></tr></thead><tbody id="mealBody"></tbody></table></div></section>
+</section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <div><h3>District Overview</h3><p>Click a district to open its blocks in Drill-down.</p></div>
-          <input id="overviewSearch" class="search" type="search" placeholder="Search district...">
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>District</th><th>Total Schools</th><th>Monthly Reported</th><th>Monthly Pending</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr></thead>
-            <tbody id="overviewBody"></tbody>
-          </table>
-        </div>
-      </section>
-    </section>
+<!-- TRACKER -->
+<section id="view-tracker" class="view">
+ <div class="tracker-top">
+  <div class="trackbox"><span>Tracker Database</span><b id="tDb">Checking…</b><small>Persistent snapshot storage</small></div>
+  <div class="trackbox"><span>Latest Snapshot</span><b id="tLatest">—</b><small id="tLatestSub">—</small></div>
+  <div class="trackbox"><span>Previous Snapshot</span><b id="tPrev">—</b><small>Same report date</small></div>
+  <div class="trackbox"><span>30-minute Collection</span><b id="tSchedule">Every 30 min</b><small>GitHub Actions trigger</small></div>
+ </div>
+ <section class="panel"><div class="phead"><div><h3>30-minute Improvement Tracker</h3><p>Compares the latest snapshot with the previous snapshot for District, Block or Cluster.</p></div><button id="snapshotNow" class="btn warn">Take Snapshot Now</button></div><div class="filters">
+  <div class="field"><label>Level</label><select id="trackLevel"><option value="district">District</option><option value="block">Block</option><option value="cluster">Cluster</option></select></div>
+  <div class="field"><label>District filter</label><select id="trackDistrict"><option value="">All districts</option></select></div>
+  <div class="field"><label>Block filter</label><select id="trackBlock" disabled><option value="">All blocks</option></select></div>
+ </div></section>
+ <div class="grid2">
+  <section class="panel"><div class="phead"><div><h3>Improvement Since Previous Snapshot</h3><p id="trackPeriod">Need at least two snapshots.</p></div><input id="trackSearch" class="search" placeholder="Search..."></div><div class="tablewrap"><table><thead><tr><th>Entity</th><th>Reporting %</th><th>Δ %</th><th>+ Reported</th><th>Pending Reduced</th><th>+ Meals</th><th>Status</th></tr></thead><tbody id="trackBody"></tbody></table></div></section>
+  <section class="panel"><div class="phead"><div><h3 id="timelineTitle">Reporting Progress Timeline</h3><p>Click any tracker row to view its history.</p></div></div><div class="pbody"><div id="timelineEmpty" class="empty">Select an entity from the tracker table.</div><div id="timelineWrap" class="chartwrap" style="display:none"><svg id="timelineChart" class="chart" viewBox="0 0 700 230" preserveAspectRatio="none"></svg><div id="timelineMeta" style="font-size:11px;color:var(--muted);margin-top:9px"></div></div></div></section>
+ </div>
+ <section class="panel"><div class="phead"><div><h3>District Completion Time</h3><p>Earliest stored snapshot where daily pending became zero.</p></div></div><div class="tablewrap"><table><thead><tr><th>District</th><th>Completed at</th><th>Report date</th></tr></thead><tbody id="completionBody"></tbody></table></div></section>
+</section>
 
-    <!-- DRILL DOWN -->
-    <section id="view-drilldown" class="view">
-      <section class="panel">
-        <div class="panel-head">
-          <div><h3>Drill-down Explorer</h3><p>District → Block → Cluster → School</p></div>
-          <div class="breadcrumb-btns">
-            <button id="clearDrill" class="secondary-btn">Reset</button>
-          </div>
-        </div>
-        <div class="filters">
-          <div class="field"><label>District</label><select id="drillDistrict"><option value="">Select district</option></select></div>
-          <div class="field"><label>Block</label><select id="drillBlock" disabled><option value="">Select block</option></select></div>
-          <div class="field"><label>Cluster</label><select id="drillCluster" disabled><option value="">Select cluster</option></select></div>
-        </div>
-        <div class="hint" id="drillHint">Select a district to see its blocks.</div>
-      </section>
+<!-- COMPARE -->
+<section id="view-compare" class="view">
+ <section class="panel"><div class="phead"><div><h3>District Comparison</h3><p>Side-by-side operational comparison.</p></div></div><div class="filters" style="grid-template-columns:1fr 1fr"><div class="field"><label>District A</label><select id="cmpA"><option value="">Select district</option></select></div><div class="field"><label>District B</label><select id="cmpB"><option value="">Select district</option></select></div></div></section>
+ <div class="compare-grid"><div id="cmpCardA" class="compare-card"><div class="empty">Select District A</div></div><div id="cmpCardB" class="compare-card"><div class="empty">Select District B</div></div></div>
+ <section class="panel" style="margin-top:17px"><div class="phead"><div><h3>Difference</h3><p>A minus B. Positive is not always “better”; interpret each metric appropriately.</p></div></div><div class="pbody" id="cmpDelta"><div class="empty">Select both districts.</div></div></section>
+</section>
 
-      <section class="stats">
-        <div class="stat"><span>Current Level</span><strong id="dLevel">Assam</strong><div class="sub" id="dName">Choose a district</div></div>
-        <div class="stat"><span>Total Schools</span><strong id="dTotal">—</strong></div>
-        <div class="stat danger"><span>Daily Pending</span><strong id="dPending">—</strong></div>
-        <div class="stat"><span>Meals Served</span><strong id="dMeals">—</strong></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <div><h3 id="drillTableTitle">Districts</h3><p id="drillBreadcrumb">Assam</p></div>
-          <input id="drillSearch" class="search" type="search" placeholder="Search...">
-        </div>
-        <div class="table-wrap">
-          <table><thead id="drillHead"></thead><tbody id="drillBody"></tbody></table>
-        </div>
-      </section>
-    </section>
-
-    <!-- MEALS SERVED ANALYTICS -->
-    <section id="view-meals" class="view">
-      <section class="panel">
-        <div class="panel-head">
-          <div><h3>Meals Served Analysis</h3><p>Compare Assam → District → Block → Cluster live meal counts.</p></div>
-          <button id="resetMeals" class="secondary-btn">Reset</button>
-        </div>
-        <div class="filters">
-          <div class="field"><label>District</label><select id="mealDistrict"><option value="">All Assam</option></select></div>
-          <div class="field"><label>Block</label><select id="mealBlock" disabled><option value="">All blocks</option></select></div>
-          <div class="field"><label>Cluster</label><select id="mealCluster" disabled><option value="">All clusters</option></select></div>
-        </div>
-      </section>
-
-      <section class="meal-grid">
-        <div class="meal-card"><div class="scope">Assam</div><div class="name">Entire State</div><div class="value" id="mAssam">—</div><div class="share">Total meals served today</div></div>
-        <div class="meal-card"><div class="scope">District</div><div class="name" id="mDistrictName">Select district</div><div class="value" id="mDistrict">—</div><div class="share" id="mDistrictShare">Share of Assam: —</div></div>
-        <div class="meal-card"><div class="scope">Block</div><div class="name" id="mBlockName">Select block</div><div class="value" id="mBlock">—</div><div class="share" id="mBlockShare">Share of district: —</div></div>
-        <div class="meal-card"><div class="scope">Cluster</div><div class="name" id="mClusterName">Select cluster</div><div class="value" id="mCluster">—</div><div class="share" id="mClusterShare">Share of block: —</div></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <div><h3 id="mealRankTitle">District-wise Meals Served</h3><p id="mealRankSub">Assam total distribution by district</p></div>
-          <input id="mealSearch" class="search" type="search" placeholder="Search...">
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Rank</th><th id="mealScopeHead">District</th><th>Meals Served</th><th>Share</th><th>Distribution</th></tr></thead>
-            <tbody id="mealBody"></tbody>
-          </table>
-        </div>
-      </section>
-    </section>
-  </main>
-</div>
-
+<!-- REPORTS -->
+<section id="view-reports" class="view">
+ <section class="panel"><div class="phead"><div><h3>Daily MIS Reports</h3><p>Download a state-level CSV generated from the current live district summary.</p></div></div><div class="pbody"><div class="report-actions"><a class="btn primary download" href="/api/report/daily.csv">Download Daily State CSV</a><button id="reportSnapshot" class="btn soft">Open Tracker</button></div><p style="font-size:11px;color:var(--muted);margin-top:15px">CSV includes reporting %, pending, meals per reporting school and meals as % of reported enrollment. Historical tracker records are visible in the 30m Tracker tab.</p></div></section>
+ <section class="panel"><div class="phead"><div><h3>Analysis Rules Used</h3><p>Transparent thresholds for the dashboard.</p></div></div><div class="pbody"><div class="grid3"><div class="mini"><span>Green reporting</span><strong>≥ 99%</strong></div><div class="mini"><span>Attention</span><strong>95–98.99%</strong></div><div class="mini"><span>High attention</span><strong>&lt; 95%</strong></div></div><p style="font-size:11px;color:var(--muted);margin-top:14px">These are dashboard analysis thresholds, not official policy thresholds. Adjust them later if State MIS provides official cut-offs.</p></div></section>
+</section>
+</main></div>
 <script>
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let activeView='executive', districtCache=null, reportDate='—';
+const blockCache=new Map(), clusterCache=new Map(), schoolCache=new Map();
+const fmt=n=>Number(n||0).toLocaleString('en-IN');
+const pct=(a,b)=>b?Number(a||0)/Number(b)*100:0;
+const dt=s=>s?new Date(s).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+function notice(msg,type='err'){const n=$('#notice');if(!msg){n.className='notice';n.textContent='';return}n.className='notice '+type;n.textContent=msg}
+function loading(v){$('#loader').classList.toggle('show',v)}
+async function jget(url,opts={}){loading(true);notice('');try{const r=await fetch(url,{headers:{Accept:'application/json'},...opts});const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(`Backend returned HTTP ${r.status} instead of JSON.`)}if(!r.ok||!j.ok)throw new Error(j.error||`Request failed (${r.status})`);return j}finally{loading(false)}}
+async function districts(force=false){if(districtCache&&!force)return districtCache;const j=await jget('/api/districts');districtCache=j.data;reportDate=j.reportDate||'—';$('#reportDate').textContent='Report date: '+reportDate;return districtCache}
+async function blocks(dc,force=false){if(blockCache.has(dc)&&!force)return blockCache.get(dc);const j=await jget('/api/blocks?districtCode='+encodeURIComponent(dc));blockCache.set(dc,j.data);return j.data}
+async function clusters(dc,bc,force=false){const k=dc+'|'+bc;if(clusterCache.has(k)&&!force)return clusterCache.get(k);const j=await jget(`/api/clusters?districtCode=${encodeURIComponent(dc)}&blockCode=${encodeURIComponent(bc)}`);clusterCache.set(k,j.data);return j.data}
+async function schools(dc,bc,cc,force=false){const k=dc+'|'+bc+'|'+cc;if(schoolCache.has(k)&&!force)return schoolCache.get(k);const j=await jget(`/api/schools?districtCode=${encodeURIComponent(dc)}&blockCode=${encodeURIComponent(bc)}&clusterCode=${encodeURIComponent(cc)}`);schoolCache.set(k,j.data);return j.data}
+function setUpdated(){ $('#updated').textContent='Updated '+new Date().toLocaleTimeString('en-IN'); }
+function fill(el,rows,valKey,nameKey,placeholder){const old=el.value;el.innerHTML=`<option value="">${placeholder}</option>`+rows.map(r=>`<option value="${r[valKey]}">${r[nameKey]}</option>`).join('');if(rows.some(r=>String(r[valKey])===String(old)))el.value=old}
+function bindSearch(inp,body){$(inp).addEventListener('input',e=>{const q=e.target.value.toLowerCase();for(const tr of $(body).rows)tr.style.display=tr.innerText.toLowerCase().includes(q)?'':'none'})}
+function setView(v){activeView=v;$$('.view').forEach(x=>x.classList.remove('active'));$('#view-'+v).classList.add('active');$$('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));if(v==='executive')loadExecutive();if(v==='drill')initDrill();if(v==='meals')initMeals();if(v==='tracker')initTracker();if(v==='compare')initCompare()}
+$$('.navbtn').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 
-let activeView = "overview";
-let districtsCache = null;
-const blocksCache = new Map();
-const clustersCache = new Map();
-const schoolsCache = new Map();
+// EXECUTIVE
+async function loadExecutive(force=false){try{const rows=await districts(force);const total=rows.reduce((a,r)=>a+r.totalSchools,0), rep=rows.reduce((a,r)=>a+r.dailyReported,0), pend=rows.reduce((a,r)=>a+r.dailyNotReported,0), meals=rows.reduce((a,r)=>a+r.mealsServed,0), completed=rows.filter(r=>r.dailyNotReported===0).length;$('#xTotal').textContent=fmt(total);$('#xReported').textContent=fmt(rep);$('#xPct').textContent=pct(rep,total).toFixed(2)+'% reporting';$('#xPending').textContent=fmt(pend);$('#xComplete').textContent=completed;$('#xCompleteSub').textContent=`of ${rows.length} districts`;$('#xMeals').textContent=fmt(meals);
+ $('#execBody').innerHTML=rows.map(r=>{const rp=pct(r.dailyReported,r.totalSchools),mps=r.dailyReported?r.mealsServed/r.dailyReported:0,mer=r.enrolled?r.mealsServed/r.enrolled*100:0;return `<tr><td><a class="link exec-open" data-code="${r.districtCode}">${r.district}</a></td><td>${fmt(r.totalSchools)}</td><td class="green">${fmt(r.dailyReported)}</td><td class="${r.dailyNotReported?'red':''}">${fmt(r.dailyNotReported)}</td><td><b>${rp.toFixed(2)}%</b></td><td>${fmt(r.mealsServed)}</td><td>${mps.toFixed(1)}</td><td>${mer.toFixed(1)}%</td></tr>`}).join('');
+ const attention=[...rows].sort((a,b)=>pct(a.dailyReported,a.totalSchools)-pct(b.dailyReported,b.totalSchools)||b.dailyNotReported-a.dailyNotReported).slice(0,7);$('#attention').innerHTML=attention.map(r=>{const rp=pct(r.dailyReported,r.totalSchools);return `<div class="alertrow"><div class="alerticon">!</div><div><b>${r.district} — ${rp.toFixed(2)}%</b><p>${fmt(r.dailyNotReported)} schools pending • ${fmt(r.mealsServed)} meals served</p></div></div>`}).join('');
+ const rank=[...rows].sort((a,b)=>pct(a.dailyReported,a.totalSchools)-pct(b.dailyReported,b.totalSchools));$('#reportRank').innerHTML=rank.slice(0,10).map((r,i)=>{const rp=pct(r.dailyReported,r.totalSchools);return `<div class="rankrow"><b>#${i+1}</b><span>${r.district}</span><b>${rp.toFixed(2)}%</b><div class="bar"><i style="width:${Math.max(1,rp)}%"></i></div></div>`}).join('');
+ $('#heatgrid').innerHTML=rows.map(r=>{const rp=pct(r.dailyReported,r.totalSchools),cl=rp>=99?'good':rp>=95?'mid':'low';return `<div class="heat ${cl} exec-open" data-code="${r.districtCode}"><b>${r.district}</b>${rp.toFixed(1)}% • ${fmt(r.dailyNotReported)} pending</div>`}).join('');setUpdated()}catch(e){notice(e.message)}}
+$('#view-executive').addEventListener('click',async e=>{const a=e.target.closest('.exec-open');if(!a)return;setView('drill');await drillDistrictSelect(a.dataset.code)});
+bindSearch('#execSearch','#execBody');
 
-function fmt(n){ return Number(n||0).toLocaleString("en-IN"); }
-function pct(part,total){ return total ? ((Number(part||0)/Number(total))*100).toFixed(2)+"%" : "0.00%"; }
-function showError(msg=""){
-  const box=$("#errorBox");
-  box.textContent=msg;
-  box.style.display=msg?"block":"none";
-}
-function setLoading(v){ $("#globalLoader").classList.toggle("hidden", !v); }
-function setUpdated(){ $("#lastUpdated").textContent="Updated "+new Date().toLocaleTimeString(); }
+// DRILL
+async function initDrill(){try{const ds=await districts();fill($('#drillDistrict'),ds,'districtCode','district','Select district');if(!$('#drillDistrict').value)renderDistrictLevel(ds)}catch(e){notice(e.message)}}
+function drillCards(level,name,schoolsN,reported,pending,meals){$('#dLevel').textContent=level;$('#dName').textContent=name;$('#dSchools').textContent=fmt(schoolsN);$('#dPct').textContent=pct(reported,schoolsN).toFixed(2)+'%';$('#dMeals').textContent=fmt(meals)}
+function renderDistrictLevel(ds){$('#drillTitle').textContent='Districts';$('#drillCrumb').textContent='Assam';$('#drillHead').innerHTML='<tr><th>District</th><th>Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals</th></tr>';$('#drillBody').innerHTML=ds.map(r=>`<tr><td><a class="link dd-d" data-code="${r.districtCode}">${r.district}</a></td><td>${fmt(r.totalSchools)}</td><td>${fmt(r.dailyReported)}</td><td class="red">${fmt(r.dailyNotReported)}</td><td>${pct(r.dailyReported,r.totalSchools).toFixed(2)}%</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');drillCards('Assam','All districts',ds.reduce((a,r)=>a+r.totalSchools,0),ds.reduce((a,r)=>a+r.dailyReported,0),ds.reduce((a,r)=>a+r.dailyNotReported,0),ds.reduce((a,r)=>a+r.mealsServed,0))}
+async function drillDistrictSelect(code){const ds=await districts(),d=ds.find(x=>String(x.districtCode)===String(code));if(!d)return;$('#drillDistrict').value=code;const bs=await blocks(code);fill($('#drillBlock'),bs,'blockCode','block','Select block');$('#drillBlock').disabled=false;$('#drillCluster').innerHTML='<option value="">Select cluster</option>';$('#drillCluster').disabled=true;$('#drillTitle').textContent='Blocks — '+d.district;$('#drillCrumb').textContent='Assam / '+d.district;$('#drillHead').innerHTML='<tr><th>Block</th><th>Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals</th></tr>';$('#drillBody').innerHTML=bs.map(r=>`<tr><td><a class="link dd-b" data-code="${r.blockCode}">${r.block}</a></td><td>${fmt(r.totalSchools)}</td><td>${fmt(r.dailyReported)}</td><td class="red">${fmt(r.dailyNotReported)}</td><td>${pct(r.dailyReported,r.totalSchools).toFixed(2)}%</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');drillCards('District',d.district,d.totalSchools,d.dailyReported,d.dailyNotReported,d.mealsServed)}
+async function drillBlockSelect(code){const dc=$('#drillDistrict').value,ds=await districts(),d=ds.find(x=>String(x.districtCode)===String(dc)),bs=await blocks(dc),b=bs.find(x=>String(x.blockCode)===String(code));if(!b)return;$('#drillBlock').value=code;const cs=await clusters(dc,code);fill($('#drillCluster'),cs,'clusterCode','cluster','Select cluster');$('#drillCluster').disabled=false;$('#drillTitle').textContent='Clusters — '+b.block;$('#drillCrumb').textContent=`Assam / ${d.district} / ${b.block}`;$('#drillHead').innerHTML='<tr><th>Cluster</th><th>Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals</th></tr>';$('#drillBody').innerHTML=cs.map(r=>`<tr><td><a class="link dd-c" data-code="${r.clusterCode}">${r.cluster}</a></td><td>${fmt(r.totalSchools)}</td><td>${fmt(r.dailyReported)}</td><td class="red">${fmt(r.dailyNotReported)}</td><td>${pct(r.dailyReported,r.totalSchools).toFixed(2)}%</td><td>${fmt(r.mealsServed)}</td></tr>`).join('');drillCards('Block',b.block,b.totalSchools,b.dailyReported,b.dailyNotReported,b.mealsServed)}
+async function drillClusterSelect(code){const dc=$('#drillDistrict').value,bc=$('#drillBlock').value,ds=await districts(),d=ds.find(x=>String(x.districtCode)===String(dc)),bs=await blocks(dc),b=bs.find(x=>String(x.blockCode)===String(bc)),cs=await clusters(dc,bc),c=cs.find(x=>String(x.clusterCode)===String(code));if(!c)return;$('#drillCluster').value=code;const ss=await schools(dc,bc,code);$('#drillTitle').textContent='Schools — '+c.cluster;$('#drillCrumb').textContent=`Assam / ${d.district} / ${b.block} / ${c.cluster}`;$('#drillHead').innerHTML='<tr><th>School</th><th>Code</th><th>Shift</th><th>Daily Status</th><th>Meals</th></tr>';$('#drillBody').innerHTML=ss.map(r=>`<tr><td>${r.school}</td><td>${r.schoolCode}</td><td>${r.shift}</td><td><span class="pill ${r.dailyStatus==='Yes'?'good':'bad'}">${r.dailyStatus}</span></td><td>${fmt(r.mealsServed)}</td></tr>`).join('');drillCards('Cluster',c.cluster,c.totalSchools,c.dailyReported,c.dailyNotReported,c.mealsServed)}
+$('#drillDistrict').addEventListener('change',e=>e.target.value?drillDistrictSelect(e.target.value):initDrill());$('#drillBlock').addEventListener('change',e=>e.target.value?drillBlockSelect(e.target.value):drillDistrictSelect($('#drillDistrict').value));$('#drillCluster').addEventListener('change',e=>e.target.value?drillClusterSelect(e.target.value):drillBlockSelect($('#drillBlock').value));
+$('#drillBody').addEventListener('click',e=>{const d=e.target.closest('.dd-d'),b=e.target.closest('.dd-b'),c=e.target.closest('.dd-c');if(d)drillDistrictSelect(d.dataset.code);if(b)drillBlockSelect(b.dataset.code);if(c)drillClusterSelect(c.dataset.code)});$('#drillReset').addEventListener('click',async()=>{$('#drillDistrict').value='';$('#drillBlock').disabled=true;$('#drillCluster').disabled=true;$('#drillBlock').innerHTML='<option value="">Select block</option>';$('#drillCluster').innerHTML='<option value="">Select cluster</option>';renderDistrictLevel(await districts())});bindSearch('#drillSearch','#drillBody');
 
-async function api(url){
-  setLoading(true); showError("");
-  try{
-    const r=await fetch(url,{headers:{Accept:"application/json"}});
-    const text=await r.text();
-    let j;
-    try{ j=JSON.parse(text); }catch(_){ throw new Error(`Backend returned HTTP ${r.status} instead of JSON.`); }
-    if(!r.ok || !j.ok) throw new Error(j.error || `Request failed (${r.status})`);
-    return j.data;
-  } finally { setLoading(false); }
-}
-async function getDistricts(force=false){
-  if(!force && districtsCache) return districtsCache;
-  districtsCache=await api("/api/districts");
-  return districtsCache;
-}
-async function getBlocks(districtCode,force=false){
-  if(!force && blocksCache.has(districtCode)) return blocksCache.get(districtCode);
-  const rows=await api(`/api/blocks?districtCode=${encodeURIComponent(districtCode)}`);
-  blocksCache.set(districtCode,rows); return rows;
-}
-async function getClusters(districtCode,blockCode,force=false){
-  const key=`${districtCode}|${blockCode}`;
-  if(!force && clustersCache.has(key)) return clustersCache.get(key);
-  const rows=await api(`/api/clusters?districtCode=${encodeURIComponent(districtCode)}&blockCode=${encodeURIComponent(blockCode)}`);
-  clustersCache.set(key,rows); return rows;
-}
-async function getSchools(districtCode,blockCode,clusterCode,force=false){
-  const key=`${districtCode}|${blockCode}|${clusterCode}`;
-  if(!force && schoolsCache.has(key)) return schoolsCache.get(key);
-  const rows=await api(`/api/schools?districtCode=${encodeURIComponent(districtCode)}&blockCode=${encodeURIComponent(blockCode)}&clusterCode=${encodeURIComponent(clusterCode)}`);
-  schoolsCache.set(key,rows); return rows;
-}
-function clearCaches(){
-  districtsCache=null; blocksCache.clear(); clustersCache.clear(); schoolsCache.clear();
-}
+// MEALS
+function mealRank(rows,key,title,sub,total){const s=[...rows].sort((a,b)=>b.mealsServed-a.mealsServed),max=Math.max(1,...s.map(x=>x.mealsServed));$('#mealTitle').textContent=title;$('#mealSub').textContent=sub;$('#mealEntityHead').textContent=key[0].toUpperCase()+key.slice(1);$('#mealBody').innerHTML=s.map((r,i)=>`<tr><td>#${i+1}</td><td><b>${r[key]}</b></td><td>${fmt(r.mealsServed)}</td><td>${pct(r.mealsServed,total).toFixed(2)}%</td><td><div class="bar"><i style="width:${Math.max(1,pct(r.mealsServed,max))}%"></i></div></td></tr>`).join('')}
+async function initMeals(){try{const ds=await districts();fill($('#mealDistrict'),ds,'districtCode','district','All Assam');const total=ds.reduce((a,r)=>a+r.mealsServed,0);$('#mAssam').textContent=fmt(total);if(!$('#mealDistrict').value){$('#mDistrict').textContent='—';$('#mBlock').textContent='—';$('#mCluster').textContent='—';$('#mDShare').textContent='Select district';$('#mBShare').textContent='Select block';$('#mCShare').textContent='Select cluster';mealRank(ds,'district','District-wise Meals Served','Share of Assam total',total)}}catch(e){notice(e.message)}}
+async function mealD(code){const ds=await districts(),total=ds.reduce((a,r)=>a+r.mealsServed,0);if(!code){$('#mealBlock').disabled=true;$('#mealCluster').disabled=true;$('#mealBlock').innerHTML='<option value="">All blocks</option>';$('#mealCluster').innerHTML='<option value="">All clusters</option>';return initMeals()}const d=ds.find(x=>String(x.districtCode)===String(code)),bs=await blocks(code);fill($('#mealBlock'),bs,'blockCode','block','All blocks');$('#mealBlock').disabled=false;$('#mealCluster').disabled=true;$('#mealCluster').innerHTML='<option value="">All clusters</option>';$('#mDistrict').textContent=fmt(d.mealsServed);$('#mDLabel').textContent=d.district;$('#mDShare').textContent=pct(d.mealsServed,total).toFixed(2)+'% of Assam';$('#mBlock').textContent='—';$('#mCluster').textContent='—';mealRank(bs,'block','Block-wise Meals Served — '+d.district,'District total: '+fmt(d.mealsServed),d.mealsServed)}
+async function mealB(code){const dc=$('#mealDistrict').value;if(!code)return mealD(dc);const ds=await districts(),d=ds.find(x=>String(x.districtCode)===String(dc)),bs=await blocks(dc),b=bs.find(x=>String(x.blockCode)===String(code)),cs=await clusters(dc,code);fill($('#mealCluster'),cs,'clusterCode','cluster','All clusters');$('#mealCluster').disabled=false;$('#mBlock').textContent=fmt(b.mealsServed);$('#mBLabel').textContent=b.block;$('#mBShare').textContent=pct(b.mealsServed,d.mealsServed).toFixed(2)+'% of district';$('#mCluster').textContent='—';mealRank(cs,'cluster','Cluster-wise Meals Served — '+b.block,'Block total: '+fmt(b.mealsServed),b.mealsServed)}
+async function mealC(code){const dc=$('#mealDistrict').value,bc=$('#mealBlock').value;if(!code)return mealB(bc);const bs=await blocks(dc),b=bs.find(x=>String(x.blockCode)===String(bc)),cs=await clusters(dc,bc),c=cs.find(x=>String(x.clusterCode)===String(code)),ss=await schools(dc,bc,code);$('#mCluster').textContent=fmt(c.mealsServed);$('#mCLabel').textContent=c.cluster;$('#mCShare').textContent=pct(c.mealsServed,b.mealsServed).toFixed(2)+'% of block';mealRank(ss,'school','School-wise Meals Served — '+c.cluster,'Cluster total: '+fmt(c.mealsServed),c.mealsServed)}
+$('#mealDistrict').addEventListener('change',e=>mealD(e.target.value));$('#mealBlock').addEventListener('change',e=>mealB(e.target.value));$('#mealCluster').addEventListener('change',e=>mealC(e.target.value));$('#mealReset').addEventListener('click',()=>{$('#mealDistrict').value='';initMeals()});bindSearch('#mealSearch','#mealBody');
 
-function setView(view){
-  activeView=view;
-  $$(".view").forEach(v=>v.classList.remove("active"));
-  $(`#view-${view}`).classList.add("active");
-  $$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
-  showError("");
-  if(view==="overview") loadOverview();
-  if(view==="drilldown") initDrilldown();
-  if(view==="meals") initMeals();
-}
+// TRACKER
+async function trackerStatus(){const j=await jget('/api/tracker/status');$('#tDb').textContent=j.configured?'Connected':'Not configured';$('#tDb').className=j.configured?'green':'red';$('#tLatest').textContent=j.latest?dt(j.latest.capturedAt):'No snapshot';$('#tLatestSub').textContent=j.latest?`${j.latest.metricCount} district/block/cluster rows • ${Math.round(j.latest.durationSeconds)}s`:'Create baseline first';$('#tPrev').textContent=j.previous?dt(j.previous.capturedAt):'No previous';return j}
+async function initTracker(){try{const ds=await districts();fill($('#trackDistrict'),ds,'districtCode','district','All districts');await trackerStatus();await loadImprovements();await loadCompletion()}catch(e){notice(e.message)}}
+async function loadImprovements(){const level=$('#trackLevel').value,dc=$('#trackDistrict').value,bc=$('#trackBlock').value;let url='/api/tracker/improvements?level='+level;if(dc)url+='&districtCode='+encodeURIComponent(dc);if(bc&&level==='cluster')url+='&blockCode='+encodeURIComponent(bc);const j=await jget(url),x=j.data;if(x.latest&&x.previous)$('#trackPeriod').textContent=`${dt(x.previous.capturedAt)} → ${dt(x.latest.capturedAt)} (${x.latest.reportDate})`;else if(x.latest)$('#trackPeriod').textContent='Baseline exists. Next snapshot will show improvement.';else $('#trackPeriod').textContent='No snapshots yet. Take a baseline snapshot.';$('#trackBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr class="track-row" data-level="${level}" data-code="${r.entityCode}" data-name="${r.entityName}"><td><a class="link">${r.entityName}</a>${r.districtName&&level!=='district'?`<div style="font-size:9px;color:var(--muted)">${r.districtName}${r.blockName&&level==='cluster'?' / '+r.blockName:''}</div>`:''}</td><td><b>${r.reportingPct.toFixed(2)}%</b></td><td class="${r.reportingPctDelta>0?'green':r.reportingPctDelta<0?'red':''}">${r.reportingPctDelta>=0?'+':''}${r.reportingPctDelta.toFixed(2)} pp</td><td class="${r.reportedDelta>0?'green':r.reportedDelta<0?'red':''}">${r.reportedDelta>=0?'+':''}${fmt(r.reportedDelta)}</td><td class="${r.pendingReduced>0?'green':r.pendingReduced<0?'red':''}">${r.pendingReduced>=0?'+':''}${fmt(r.pendingReduced)}</td><td class="${r.mealsDelta>0?'green':r.mealsDelta<0?'red':''}">${r.mealsDelta>=0?'+':''}${fmt(r.mealsDelta)}</td><td><span class="pill ${r.status==='improved'?'good':r.status==='regressed'?'bad':r.status==='baseline'?'base':'stable'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No tracker data for this filter.</td></tr>'}
+async function trackerLevelChanged(){const level=$('#trackLevel').value;$('#trackDistrict').disabled=false;$('#trackBlock').disabled=level!=='cluster';if(level==='district'){$('#trackDistrict').value='';$('#trackBlock').value=''}if(level==='block')$('#trackBlock').value='';await loadImprovements()}
+$('#trackLevel').addEventListener('change',trackerLevelChanged);$('#trackDistrict').addEventListener('change',async e=>{if($('#trackLevel').value==='cluster'&&e.target.value){const bs=await blocks(e.target.value);fill($('#trackBlock'),bs,'blockCode','block','All blocks');$('#trackBlock').disabled=false}else if($('#trackLevel').value==='cluster'){$('#trackBlock').innerHTML='<option value="">All blocks</option>'}await loadImprovements()});$('#trackBlock').addEventListener('change',loadImprovements);
+$('#snapshotNow').addEventListener('click',async()=>{try{$('#snapshotNow').disabled=true;notice('Snapshot collection started. It fetches every district, block and cluster; this can take a few minutes.','info');const j=await jget('/api/tracker/run?source=dashboard',{method:'POST'});notice(j.data.skipped?j.data.reason:`Snapshot saved: ${j.data.metricCount} rows in ${Math.round(j.data.durationSeconds)} seconds.`,'info');await initTracker()}catch(e){notice(e.message)}finally{$('#snapshotNow').disabled=false}});
+$('#trackBody').addEventListener('click',e=>{const tr=e.target.closest('.track-row');if(tr)loadTimeline(tr.dataset.level,tr.dataset.code,tr.dataset.name)});bindSearch('#trackSearch','#trackBody');
+async function loadTimeline(level,code,name){const j=await jget(`/api/tracker/timeline?level=${level}&code=${encodeURIComponent(code)}&limit=16`),rows=j.data;$('#timelineTitle').textContent='Reporting Progress — '+name;if(!rows.length){$('#timelineEmpty').style.display='block';$('#timelineWrap').style.display='none';return}$('#timelineEmpty').style.display='none';$('#timelineWrap').style.display='block';const svg=$('#timelineChart'),W=700,H=230,pad=36,minY=Math.max(0,Math.min(...rows.map(r=>r.reportingPct))-2),maxY=Math.min(100,Math.max(...rows.map(r=>r.reportingPct))+2),range=Math.max(1,maxY-minY);let g='';for(let i=0;i<5;i++){const y=pad+(H-pad*2)*i/4,val=maxY-(range*i/4);g+=`<line class="grid" x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}"/><text x="4" y="${y+3}">${val.toFixed(1)}%</text>`}const pts=rows.map((r,i)=>{const x=pad+(W-pad*2)*(rows.length===1?0:i/(rows.length-1)),y=pad+(H-pad*2)*(maxY-r.reportingPct)/range;return{x,y,r}});g+=`<polyline class="line" points="${pts.map(p=>p.x+','+p.y).join(' ')}"/>`;pts.forEach((p,i)=>{g+=`<circle class="point" cx="${p.x}" cy="${p.y}" r="4"><title>${dt(p.r.capturedAt)} — ${p.r.reportingPct}%</title></circle>`;if(i===0||i===pts.length-1)g+=`<text x="${p.x}" y="${H-8}" text-anchor="${i===0?'start':'end'}">${dt(p.r.capturedAt)}</text>`});svg.innerHTML=g;const last=rows[rows.length-1],first=rows[0];$('#timelineMeta').textContent=`${rows.length} snapshots • Reporting ${first.reportingPct}% → ${last.reportingPct}% • Pending ${fmt(last.dailyNotReported)} • Meals ${fmt(last.mealsServed)}`}
+async function loadCompletion(){const j=await jget('/api/tracker/completion');$('#completionBody').innerHTML=j.data.length?j.data.map(r=>`<tr><td>${r.district}</td><td>${dt(r.completedAt)}</td><td>${r.reportDate}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">Completion times will appear after tracked snapshots capture districts at 0 pending.</td></tr>'}
 
-function fillSelect(el,rows,valueKey,nameKey,placeholder){
-  const selected=el.value;
-  el.innerHTML=`<option value="">${placeholder}</option>`+rows.map(r=>`<option value="${r[valueKey]}">${r[nameKey]}</option>`).join("");
-  if(rows.some(r=>String(r[valueKey])===String(selected))) el.value=selected;
-}
+// COMPARE
+async function initCompare(){try{const ds=await districts();fill($('#cmpA'),ds,'districtCode','district','Select district');fill($('#cmpB'),ds,'districtCode','district','Select district');renderCompare()}catch(e){notice(e.message)}}
+function cmpCard(r){if(!r)return '<div class="empty">Select a district</div>';const rp=pct(r.dailyReported,r.totalSchools),mps=r.dailyReported?r.mealsServed/r.dailyReported:0;return `<h3>${r.district}</h3><div class="compare-line"><span>Total Schools</span><b>${fmt(r.totalSchools)}</b></div><div class="compare-line"><span>Reported</span><b>${fmt(r.dailyReported)}</b></div><div class="compare-line"><span>Pending</span><b class="red">${fmt(r.dailyNotReported)}</b></div><div class="compare-line"><span>Reporting %</span><b>${rp.toFixed(2)}%</b></div><div class="compare-line"><span>Meals Served</span><b>${fmt(r.mealsServed)}</b></div><div class="compare-line"><span>Meals / reporting school</span><b>${mps.toFixed(1)}</b></div>`}
+async function renderCompare(){const ds=await districts(),a=ds.find(x=>String(x.districtCode)===String($('#cmpA').value)),b=ds.find(x=>String(x.districtCode)===String($('#cmpB').value));$('#cmpCardA').innerHTML=cmpCard(a);$('#cmpCardB').innerHTML=cmpCard(b);if(!a||!b){$('#cmpDelta').innerHTML='<div class="empty">Select both districts.</div>';return}const metrics=[['Total Schools',a.totalSchools-b.totalSchools],['Reported',a.dailyReported-b.dailyReported],['Pending',a.dailyNotReported-b.dailyNotReported],['Reporting %',pct(a.dailyReported,a.totalSchools)-pct(b.dailyReported,b.totalSchools)],['Meals Served',a.mealsServed-b.mealsServed]];$('#cmpDelta').innerHTML='<table class="delta-table">'+metrics.map(([k,v])=>`<tr><td>${k}</td><td><b class="${v>0?'green':v<0?'red':''}">${v>0?'+':''}${k==='Reporting %'?v.toFixed(2)+' pp':fmt(v)}</b></td></tr>`).join('')+'</table>'}
+$('#cmpA').addEventListener('change',renderCompare);$('#cmpB').addEventListener('change',renderCompare);
 
-/* OVERVIEW */
-async function loadOverview(force=false){
-  try{
-    const rows=await getDistricts(force);
-    $("#overviewBody").innerHTML=rows.map(r=>`<tr>
-      <td><a class="link district-open" data-code="${r.districtCode}" data-name="${r.district}">${r.district}</a></td>
-      <td>${fmt(r.totalSchools)}</td><td>${fmt(r.monthlyReported)}</td><td class="bad">${fmt(r.monthlyNotReported)}</td>
-      <td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td>
-    </tr>`).join("");
-    $("#oTotal").textContent=fmt(rows.reduce((a,r)=>a+r.totalSchools,0));
-    $("#oReported").textContent=fmt(rows.reduce((a,r)=>a+r.dailyReported,0));
-    $("#oPending").textContent=fmt(rows.reduce((a,r)=>a+r.dailyNotReported,0));
-    $("#oMeals").textContent=fmt(rows.reduce((a,r)=>a+r.mealsServed,0));
-    setUpdated();
-  }catch(e){showError(e.message);}
-}
-$("#overviewBody").addEventListener("click",async e=>{
-  const a=e.target.closest(".district-open"); if(!a) return;
-  setView("drilldown");
-  await prepareDrillDistrict(a.dataset.code);
-});
+$('#reportSnapshot').addEventListener('click',()=>setView('tracker'));
+$('#refresh').addEventListener('click',async()=>{try{districtCache=null;blockCache.clear();clusterCache.clear();schoolCache.clear();if(activeView==='executive')await loadExecutive(true);else if(activeView==='drill')await initDrill();else if(activeView==='meals')await initMeals();else if(activeView==='tracker')await initTracker();else if(activeView==='compare')await initCompare();setUpdated()}catch(e){notice(e.message)}});
 
-/* DRILLDOWN */
-async function initDrilldown(){
-  try{
-    const districts=await getDistricts();
-    fillSelect($("#drillDistrict"),districts,"districtCode","district","Select district");
-    if(!$("#drillDistrict").value){
-      renderDrillDistricts(districts);
-    }
-  }catch(e){showError(e.message);}
-}
-function drillStats(level,name,total,pending,meals){
-  $("#dLevel").textContent=level; $("#dName").textContent=name||"";
-  $("#dTotal").textContent=fmt(total); $("#dPending").textContent=fmt(pending); $("#dMeals").textContent=fmt(meals);
-}
-function renderDrillDistricts(rows){
-  $("#drillTableTitle").textContent="Districts"; $("#drillBreadcrumb").textContent="Assam";
-  $("#drillHead").innerHTML="<tr><th>District</th><th>Total Schools</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>";
-  $("#drillBody").innerHTML=rows.map(r=>`<tr><td><a class="link dd-district" data-code="${r.districtCode}">${r.district}</a></td><td>${fmt(r.totalSchools)}</td><td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
-  drillStats("Assam","All districts",rows.reduce((a,r)=>a+r.totalSchools,0),rows.reduce((a,r)=>a+r.dailyNotReported,0),rows.reduce((a,r)=>a+r.mealsServed,0));
-  $("#drillHint").textContent="Select a district to see its blocks.";
-}
-function renderDrillBlocks(rows,district){
-  $("#drillTableTitle").textContent=`Blocks — ${district.district}`; $("#drillBreadcrumb").textContent=`Assam / ${district.district}`;
-  $("#drillHead").innerHTML="<tr><th>Block</th><th>Total Schools</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>";
-  $("#drillBody").innerHTML=rows.map(r=>`<tr><td><a class="link dd-block" data-code="${r.blockCode}">${r.block}</a></td><td>${fmt(r.totalSchools)}</td><td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
-  drillStats("District",district.district,district.totalSchools,district.dailyNotReported,district.mealsServed);
-  $("#drillHint").textContent="Now select a block to see its clusters.";
-}
-function renderDrillClusters(rows,district,block){
-  $("#drillTableTitle").textContent=`Clusters — ${block.block}`; $("#drillBreadcrumb").textContent=`Assam / ${district.district} / ${block.block}`;
-  $("#drillHead").innerHTML="<tr><th>Cluster</th><th>Total Schools</th><th>Daily Reported</th><th>Daily Pending</th><th>Meals Served</th></tr>";
-  $("#drillBody").innerHTML=rows.map(r=>`<tr><td><a class="link dd-cluster" data-code="${r.clusterCode}">${r.cluster}</a></td><td>${fmt(r.totalSchools)}</td><td class="good">${fmt(r.dailyReported)}</td><td class="bad">${fmt(r.dailyNotReported)}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
-  drillStats("Block",block.block,block.totalSchools,block.dailyNotReported,block.mealsServed);
-  $("#drillHint").textContent="Select a cluster to see all schools inside it.";
-}
-function renderDrillSchools(rows,district,block,cluster){
-  $("#drillTableTitle").textContent=`Schools — ${cluster.cluster}`; $("#drillBreadcrumb").textContent=`Assam / ${district.district} / ${block.block} / ${cluster.cluster}`;
-  $("#drillHead").innerHTML="<tr><th>School</th><th>School Code</th><th>Shift</th><th>Daily Status</th><th>Meals Served</th></tr>";
-  $("#drillBody").innerHTML=rows.map(r=>`<tr><td>${r.school}</td><td>${r.schoolCode}</td><td>${r.shift}</td><td class="${r.dailyStatus==="Yes"?"good":"bad"}">${r.dailyStatus}</td><td>${fmt(r.mealsServed)}</td></tr>`).join("");
-  drillStats("Cluster",cluster.cluster,cluster.totalSchools,cluster.dailyNotReported,cluster.mealsServed);
-  $("#drillHint").textContent=`Showing ${rows.length} schools in ${cluster.cluster}.`;
-}
-async function prepareDrillDistrict(code){
-  const districts=await getDistricts();
-  $("#drillDistrict").value=code;
-  const district=districts.find(r=>String(r.districtCode)===String(code)); if(!district) return;
-  const blocks=await getBlocks(code);
-  fillSelect($("#drillBlock"),blocks,"blockCode","block","Select block");
-  $("#drillBlock").disabled=false;
-  $("#drillCluster").innerHTML='<option value="">Select cluster</option>'; $("#drillCluster").disabled=true;
-  renderDrillBlocks(blocks,district);
-}
-async function prepareDrillBlock(code){
-  const dCode=$("#drillDistrict").value; if(!dCode) return;
-  const districts=await getDistricts(); const district=districts.find(r=>String(r.districtCode)===String(dCode));
-  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(code)); if(!block) return;
-  $("#drillBlock").value=code;
-  const clusters=await getClusters(dCode,code);
-  fillSelect($("#drillCluster"),clusters,"clusterCode","cluster","Select cluster"); $("#drillCluster").disabled=false;
-  renderDrillClusters(clusters,district,block);
-}
-async function prepareDrillCluster(code){
-  const dCode=$("#drillDistrict").value,bCode=$("#drillBlock").value; if(!dCode||!bCode) return;
-  const districts=await getDistricts(); const district=districts.find(r=>String(r.districtCode)===String(dCode));
-  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(bCode));
-  const clusters=await getClusters(dCode,bCode); const cluster=clusters.find(r=>String(r.clusterCode)===String(code)); if(!cluster) return;
-  $("#drillCluster").value=code;
-  const schools=await getSchools(dCode,bCode,code);
-  renderDrillSchools(schools,district,block,cluster);
-}
-$("#drillDistrict").addEventListener("change",async e=>{
-  if(!e.target.value){
-    $("#drillBlock").disabled=true; $("#drillCluster").disabled=true;
-    $("#drillBlock").innerHTML='<option value="">Select block</option>'; $("#drillCluster").innerHTML='<option value="">Select cluster</option>';
-    renderDrillDistricts(await getDistricts()); return;
-  }
-  try{await prepareDrillDistrict(e.target.value);}catch(err){showError(err.message);}
-});
-$("#drillBlock").addEventListener("change",async e=>{
-  if(!e.target.value){await prepareDrillDistrict($("#drillDistrict").value);return;}
-  try{await prepareDrillBlock(e.target.value);}catch(err){showError(err.message);}
-});
-$("#drillCluster").addEventListener("change",async e=>{
-  if(!e.target.value){await prepareDrillBlock($("#drillBlock").value);return;}
-  try{await prepareDrillCluster(e.target.value);}catch(err){showError(err.message);}
-});
-$("#drillBody").addEventListener("click",async e=>{
-  try{
-    const d=e.target.closest(".dd-district"); if(d){$("#drillDistrict").value=d.dataset.code;await prepareDrillDistrict(d.dataset.code);return;}
-    const b=e.target.closest(".dd-block"); if(b){$("#drillBlock").value=b.dataset.code;await prepareDrillBlock(b.dataset.code);return;}
-    const c=e.target.closest(".dd-cluster"); if(c){$("#drillCluster").value=c.dataset.code;await prepareDrillCluster(c.dataset.code);}
-  }catch(err){showError(err.message);}
-});
-$("#clearDrill").addEventListener("click",async()=>{
-  $("#drillDistrict").value="";$("#drillBlock").disabled=true;$("#drillCluster").disabled=true;
-  $("#drillBlock").innerHTML='<option value="">Select block</option>';$("#drillCluster").innerHTML='<option value="">Select cluster</option>';
-  renderDrillDistricts(await getDistricts());
-});
-
-/* MEALS ANALYTICS */
-function mealCards({assam=0,district=null,block=null,cluster=null}){
-  $("#mAssam").textContent=fmt(assam);
-  $("#mDistrictName").textContent=district?.district||"Select district";
-  $("#mDistrict").textContent=district?fmt(district.mealsServed):"—";
-  $("#mDistrictShare").textContent=district?`Share of Assam: ${pct(district.mealsServed,assam)}`:"Share of Assam: —";
-  $("#mBlockName").textContent=block?.block||"Select block";
-  $("#mBlock").textContent=block?fmt(block.mealsServed):"—";
-  $("#mBlockShare").textContent=block&&district?`Share of district: ${pct(block.mealsServed,district.mealsServed)}`:"Share of district: —";
-  $("#mClusterName").textContent=cluster?.cluster||"Select cluster";
-  $("#mCluster").textContent=cluster?fmt(cluster.mealsServed):"—";
-  $("#mClusterShare").textContent=cluster&&block?`Share of block: ${pct(cluster.mealsServed,block.mealsServed)}`:"Share of block: —";
-}
-function renderMealRanking(rows,nameKey,title,sub,total){
-  const sorted=[...rows].sort((a,b)=>(b.mealsServed||0)-(a.mealsServed||0));
-  $("#mealRankTitle").textContent=title; $("#mealRankSub").textContent=sub; $("#mealScopeHead").textContent=nameKey[0].toUpperCase()+nameKey.slice(1);
-  const max=Math.max(1,...sorted.map(r=>Number(r.mealsServed||0)));
-  $("#mealBody").innerHTML=sorted.map((r,i)=>{
-    const share=pct(r.mealsServed,total);
-    const width=Math.max(1,(Number(r.mealsServed||0)/max)*100);
-    return `<tr><td>${i+1}</td><td><div class="rank-cell"><span class="rank-num">#${i+1}</span><strong>${r[nameKey]}</strong></div></td><td>${fmt(r.mealsServed)}</td><td>${share}</td><td><div class="bar"><span style="width:${width}%"></span></div></td></tr>`;
-  }).join("");
-}
-async function initMeals(){
-  try{
-    const districts=await getDistricts();
-    fillSelect($("#mealDistrict"),districts,"districtCode","district","All Assam");
-    const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
-    if(!$("#mealDistrict").value){
-      $("#mealBlock").disabled=true; $("#mealCluster").disabled=true;
-      mealCards({assam});
-      renderMealRanking(districts,"district","District-wise Meals Served","Assam total distribution by district",assam);
-    }
-  }catch(e){showError(e.message);}
-}
-async function mealDistrictChanged(code){
-  const districts=await getDistricts(); const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
-  if(!code){
-    $("#mealBlock").disabled=true;$("#mealCluster").disabled=true;
-    $("#mealBlock").innerHTML='<option value="">All blocks</option>';$("#mealCluster").innerHTML='<option value="">All clusters</option>';
-    mealCards({assam});renderMealRanking(districts,"district","District-wise Meals Served","Assam total distribution by district",assam);return;
-  }
-  const district=districts.find(r=>String(r.districtCode)===String(code));
-  const blocks=await getBlocks(code);
-  fillSelect($("#mealBlock"),blocks,"blockCode","block","All blocks");$("#mealBlock").disabled=false;
-  $("#mealCluster").innerHTML='<option value="">All clusters</option>';$("#mealCluster").disabled=true;
-  mealCards({assam,district});
-  renderMealRanking(blocks,"block",`Block-wise Meals Served — ${district.district}`,`District total: ${fmt(district.mealsServed)} meals`,district.mealsServed);
-}
-async function mealBlockChanged(code){
-  const dCode=$("#mealDistrict").value; if(!dCode) return;
-  const districts=await getDistricts(); const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
-  const district=districts.find(r=>String(r.districtCode)===String(dCode));
-  if(!code){await mealDistrictChanged(dCode);return;}
-  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(code));
-  const clusters=await getClusters(dCode,code);
-  fillSelect($("#mealCluster"),clusters,"clusterCode","cluster","All clusters");$("#mealCluster").disabled=false;
-  mealCards({assam,district,block});
-  renderMealRanking(clusters,"cluster",`Cluster-wise Meals Served — ${block.block}`,`Block total: ${fmt(block.mealsServed)} meals`,block.mealsServed);
-}
-async function mealClusterChanged(code){
-  const dCode=$("#mealDistrict").value,bCode=$("#mealBlock").value; if(!dCode||!bCode) return;
-  const districts=await getDistricts(); const assam=districts.reduce((a,r)=>a+r.mealsServed,0);
-  const district=districts.find(r=>String(r.districtCode)===String(dCode));
-  const blocks=await getBlocks(dCode); const block=blocks.find(r=>String(r.blockCode)===String(bCode));
-  if(!code){await mealBlockChanged(bCode);return;}
-  const clusters=await getClusters(dCode,bCode); const cluster=clusters.find(r=>String(r.clusterCode)===String(code));
-  mealCards({assam,district,block,cluster});
-  const schools=await getSchools(dCode,bCode,code);
-  renderMealRanking(schools,"school",`School-wise Meals Served — ${cluster.cluster}`,`Cluster total: ${fmt(cluster.mealsServed)} meals`,cluster.mealsServed);
-}
-$("#mealDistrict").addEventListener("change",async e=>{try{await mealDistrictChanged(e.target.value);}catch(err){showError(err.message);}});
-$("#mealBlock").addEventListener("change",async e=>{try{await mealBlockChanged(e.target.value);}catch(err){showError(err.message);}});
-$("#mealCluster").addEventListener("change",async e=>{try{await mealClusterChanged(e.target.value);}catch(err){showError(err.message);}});
-$("#resetMeals").addEventListener("click",async()=>{
-  $("#mealDistrict").value="";$("#mealBlock").value="";$("#mealCluster").value="";
-  await mealDistrictChanged("");
-});
-
-/* SEARCH */
-function hookSearch(inputSelector,tbodySelector){
-  $(inputSelector).addEventListener("input",e=>{
-    const q=e.target.value.toLowerCase();
-    for(const tr of $(tbodySelector).rows) tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";
-  });
-}
-hookSearch("#overviewSearch","#overviewBody");
-hookSearch("#drillSearch","#drillBody");
-hookSearch("#mealSearch","#mealBody");
-
-/* NAV + REFRESH */
-$$(".nav-item").forEach(btn=>btn.addEventListener("click",()=>setView(btn.dataset.view)));
-$("#refreshBtn").addEventListener("click",async()=>{
-  try{
-    clearCaches();
-    if(activeView==="overview") await loadOverview(true);
-    else if(activeView==="drilldown"){
-      const d=$("#drillDistrict").value,b=$("#drillBlock").value,c=$("#drillCluster").value;
-      await initDrilldown();
-      if(d){await prepareDrillDistrict(d);if(b){await prepareDrillBlock(b);if(c)await prepareDrillCluster(c);}}
-      setUpdated();
-    } else {
-      const d=$("#mealDistrict").value,b=$("#mealBlock").value,c=$("#mealCluster").value;
-      await initMeals();
-      if(d){$("#mealDistrict").value=d;await mealDistrictChanged(d);if(b){$("#mealBlock").value=b;await mealBlockChanged(b);if(c){$("#mealCluster").value=c;await mealClusterChanged(c);}}}
-      setUpdated();
-    }
-  }catch(e){showError(e.message);}
-});
-
-/* INITIAL */
-loadOverview();
+(async()=>{await loadExecutive();})();
 </script>
 </body>
 </html>

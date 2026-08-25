@@ -64,6 +64,14 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 .rate-good{color:var(--green);font-weight:800}.rate-mid{color:#ad7416;font-weight:800}.rate-low{color:var(--red);font-weight:800}
 .source-warning{padding:10px 12px;border-radius:10px;background:#fff8e7;border:1px solid #ead9aa;color:#805d10;font-size:10px;margin-top:9px}
 
+
+.prev-export-box{margin-top:12px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#fbfcff;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.prev-export-buttons{display:flex;gap:9px;flex-wrap:wrap}
+.excel-good{background:#16723a!important;color:#fff!important;border-color:#16723a!important}
+.excel-bad{background:#bd3535!important;color:#fff!important;border-color:#bd3535!important}
+.small-help{font-size:10px;color:var(--muted);margin-top:5px;max-width:720px;line-height:1.5}
+@media(max-width:760px){.prev-export-box{align-items:stretch;flex-direction:column}.prev-export-buttons .btn{flex:1}}
+
 </style>
 </head>
 <body>
@@ -224,7 +232,18 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
    <button id="prevReset" class="btn soft">Back to Districts</button>
   </div>
   <div class="pbody">
-   <div class="simple-note" id="prevAvailability">Previous district reports are checked against stored live tracker data. If the public source returns an all-zero date but the tracker captured real reporting, the dashboard uses the clearly-labelled Tracker Final Snapshot instead.</div><div class="simple-note" style="margin-top:9px"><b>V6.1 scope:</b> previous District reports + District 3/5/7-day trend are connected to the public endpoint. Historical Block / Cluster / School drill-down is intentionally not guessed; live drill-down remains fully available.</div>
+   <div class="simple-note" id="prevAvailability">Previous district reports are checked against stored tracker data. If the public source returns an all-zero date but the tracker captured real reporting, the dashboard uses the clearly-labelled Tracker Final Snapshot instead.</div>
+   <div class="simple-note" style="margin-top:9px"><b>Excel rule:</b> District / Block / Cluster “Reported” means 100% complete (0 pending). School “Reported” means Daily Status Yes.</div>
+   <div class="prev-export-box">
+    <div>
+     <b>Download Selected Date as Excel</b>
+     <div class="small-help">Each workbook contains Summary, Districts, Blocks, Clusters and Schools sheets.</div>
+    </div>
+    <div class="prev-export-buttons">
+     <button id="prevReportedExcel" class="btn excel-good">Reported Excel</button>
+     <button id="prevNotReportedExcel" class="btn excel-bad">Not Reported Excel</button>
+    </div>
+   </div>
   </div>
  </section>
 
@@ -461,6 +480,25 @@ async function prevLoadSchools(code,name){
 }
 $('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district'){prevCtx.districtCode=a.dataset.code;prevCtx.districtName=a.dataset.name;prevTrendTarget('district',a.dataset.code,a.dataset.name);$('#prevTrendSummary').innerHTML='<div class="empty">District changed. Click “Load Trend” to load verified active reporting days.</div>';$('#prevTrendBody').innerHTML='<tr><td colspan="7" class="empty">No trend loaded for this district yet.</td></tr>';notice(`${a.dataset.name} selected. Load Trend will skip state-wide zero-reporting days and validate the district name/code before analysis.`,'info');}}catch(err){notice(err.message)}});
 $('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{await prevLoadDistricts()}catch(err){notice(err.message)}});
+
+function previousExcelUrl(status){
+ const date=uiDateToReport($('#prevDate').value);
+ if(!date)throw new Error('Select a previous report date first.');
+ return `/api/report/previous.xlsx?date=${encodeURIComponent(date)}&status=${encodeURIComponent(status)}`;
+}
+$('#prevReportedExcel').addEventListener('click',()=>{
+ try{
+  notice('Preparing Reported Excel for the selected date…','info');
+  window.location.href=previousExcelUrl('reported');
+ }catch(e){notice(e.message)}
+});
+$('#prevNotReportedExcel').addEventListener('click',()=>{
+ try{
+  notice('Preparing Not Reported Excel for the selected date…','info');
+  window.location.href=previousExcelUrl('not_reported');
+ }catch(e){notice(e.message)}
+});
+
 $('#prevLoad').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevReset').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevDate').addEventListener('change',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});

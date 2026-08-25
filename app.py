@@ -11,6 +11,7 @@ import uuid
 from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
+import xlsxwriter
 
 try:
     import psycopg
@@ -1707,7 +1708,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.3", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.4", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -1978,6 +1979,320 @@ def analytics_insights_route():
         return jsonify({"ok":True,"data":analytics_insights()})
     except Exception as e:
         return jsonify({"ok":False,"error":f"{type(e).__name__}: {e}"}),500
+
+
+
+# -------------------- PREVIOUS REPORT EXCEL --------------------
+
+def _previous_status_matches(level, row, status):
+    """Aggregate: Reported = 100% complete. School: Reported = Daily Status Yes."""
+    if level == "school":
+        is_reported = str(row.get("dailyStatus") or "").strip().lower() == "yes"
+    else:
+        is_reported = to_int(row.get("dailyNotReported")) == 0 and to_int(row.get("totalSchools")) > 0
+    return is_reported if status == "reported" else not is_reported
+
+
+def _previous_tracker_rows(report_date, level):
+    meta = latest_snapshot_meta(report_date)
+    if not meta:
+        return [], None
+    return load_metrics(meta["id"], level), meta
+
+
+def _previous_school_failures(report_date):
+    if not db_enabled():
+        return [], None
+    init_db()
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT report_date,school_code,school_name,shift_id,
+                       district_code,district_name,block_code,block_name,
+                       cluster_code,cluster_name,monthly_status,daily_status,
+                       enrolled,meals_served,captured_at
+                FROM school_daily_failures
+                WHERE report_date=%s
+                ORDER BY district_name,block_name,cluster_name,school_name,shift_id
+            """, (report_date,))
+            rows = cur.fetchall()
+            cur.execute("""
+                SELECT id,captured_at,report_date,source,incomplete_clusters,gap_schools,duration_seconds
+                FROM school_gap_runs
+                WHERE report_date=%s
+                ORDER BY captured_at DESC LIMIT 1
+            """, (report_date,))
+            run = cur.fetchone()
+
+    keys = [
+        "reportDate","schoolCode","school","shift",
+        "districtCode","district","blockCode","block",
+        "clusterCode","cluster","monthlyStatus","dailyStatus",
+        "enrolled","mealsServed","capturedAt"
+    ]
+    data = []
+    for row in rows:
+        item = dict(zip(keys, row))
+        if item.get("capturedAt"):
+            item["capturedAt"] = item["capturedAt"].isoformat()
+        data.append(item)
+
+    run_meta = None
+    if run:
+        run_meta = {
+            "id":run[0],"capturedAt":run[1].isoformat(),"reportDate":run[2],
+            "source":run[3],"incompleteClusters":run[4],"gapSchools":run[5],
+            "durationSeconds":float(run[6] or 0)
+        }
+    return data, run_meta
+
+
+def _cached_historical_school_rows(report_date):
+    if not db_enabled():
+        return []
+    init_db()
+    rows = []
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT payload_json
+                FROM official_history_cache
+                WHERE report_date=%s AND level='school'
+                ORDER BY scope_key
+            """, (report_date,))
+            payloads = cur.fetchall()
+    for (payload_json,) in payloads:
+        try:
+            payload = json.loads(payload_json)
+        except Exception:
+            continue
+        rows.extend(payload.get("rows", []))
+    return rows
+
+
+def _build_previous_export_data(report_date, status):
+    report_date = validate_report_date(report_date)
+    if status not in {"reported","not_reported"}:
+        raise ValueError("status must be reported or not_reported")
+
+    warnings = []
+    sources = {}
+
+    district_page = get_official_history_page(report_date, "district")
+    district_rows = district_page.get("rows", [])
+    sources["district"] = district_page.get("dataSource") or district_page.get("source")
+    if district_page.get("dataQualityWarning"):
+        warnings.append(district_page["dataQualityWarning"])
+
+    block_rows, tracker_meta = _previous_tracker_rows(report_date, "block")
+    cluster_rows, _ = _previous_tracker_rows(report_date, "cluster")
+    if tracker_meta:
+        sources["block"] = "tracker-final-snapshot"
+        sources["cluster"] = "tracker-final-snapshot"
+    else:
+        sources["block"] = "not-captured"
+        sources["cluster"] = "not-captured"
+        warnings.append(
+            "No stored tracker snapshot exists for this date, so Block and Cluster sheets may be empty."
+        )
+
+    failures, school_run = _previous_school_failures(report_date)
+    cached_school_rows = _cached_historical_school_rows(report_date)
+
+    if status == "not_reported":
+        school_rows = [{
+            "school": r.get("school"), "schoolCode": r.get("schoolCode"), "shift": r.get("shift"),
+            "district": r.get("district"), "districtCode": r.get("districtCode"),
+            "block": r.get("block"), "blockCode": r.get("blockCode"),
+            "cluster": r.get("cluster"), "clusterCode": r.get("clusterCode"),
+            "dailyStatus": r.get("dailyStatus") or "No",
+            "enrolled": to_int(r.get("enrolled")), "mealsServed": to_int(r.get("mealsServed"))
+        } for r in failures]
+        sources["school"] = "daily-school-gap-capture" if school_run else "not-captured"
+        if not school_run:
+            warnings.append(
+                "No completed school-gap capture exists for this date. "
+                "The Not Reported Schools sheet may be empty/incomplete."
+            )
+    else:
+        school_rows = [
+            r for r in cached_school_rows
+            if str(r.get("dailyStatus") or "").strip().lower() == "yes"
+        ]
+        sources["school"] = "cached-historical-school-pages" if cached_school_rows else "not-available"
+        if not cached_school_rows:
+            warnings.append(
+                "Exact names of all Reported schools were not stored for this date. "
+                "The Reported Schools sheet shows a data-availability note rather than today's data."
+            )
+
+    return {
+        "reportDate": report_date,
+        "status": status,
+        "rows": {
+            "district": [r for r in district_rows if _previous_status_matches("district", r, status)],
+            "block": [r for r in block_rows if _previous_status_matches("block", r, status)],
+            "cluster": [r for r in cluster_rows if _previous_status_matches("cluster", r, status)],
+            "school": [r for r in school_rows if _previous_status_matches("school", r, status)],
+        },
+        "sources": sources,
+        "warnings": list(dict.fromkeys(warnings)),
+    }
+
+
+def _xlsx_sheet(workbook, name, headers, rows, widths, empty_note):
+    ws = workbook.add_worksheet(name[:31])
+    hfmt = workbook.add_format({
+        "bold": True, "font_color": "#FFFFFF", "bg_color": "#214E9B",
+        "border": 1, "align": "center", "valign": "vcenter"
+    })
+    tfmt = workbook.add_format({"border": 1, "valign": "top"})
+    nfmt = workbook.add_format({"border": 1, "num_format": "#,##0"})
+    note = workbook.add_format({
+        "italic": True, "font_color": "#7A4C00", "bg_color": "#FFF6DD",
+        "border": 1, "text_wrap": True, "valign": "vcenter"
+    })
+    ws.freeze_panes(1, 0)
+    for c, header in enumerate(headers):
+        ws.write(0, c, header, hfmt)
+    if rows:
+        for rr, row in enumerate(rows, start=1):
+            for cc, value in enumerate(row):
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    ws.write_number(rr, cc, value, nfmt)
+                else:
+                    ws.write(rr, cc, "" if value is None else str(value), tfmt)
+        ws.autofilter(0, 0, len(rows), len(headers)-1)
+    else:
+        ws.merge_range(1, 0, 2, len(headers)-1, empty_note, note)
+    for col, width in enumerate(widths):
+        ws.set_column(col, col, width)
+
+
+def build_previous_status_workbook(report_date, status):
+    data = _build_previous_export_data(report_date, status)
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {"in_memory": True})
+
+    title = workbook.add_format({"bold": True, "font_size": 16, "font_color": "#173B75"})
+    label = workbook.add_format({"bold": True, "bg_color": "#EAF0FA", "border": 1})
+    value = workbook.add_format({"border": 1})
+    info = workbook.add_format({
+        "font_color": "#176B32", "bg_color": "#EDF9F0", "border": 1, "text_wrap": True
+    })
+    warn = workbook.add_format({
+        "font_color": "#8A4B00", "bg_color": "#FFF3D6", "border": 1, "text_wrap": True
+    })
+
+    summary = workbook.add_worksheet("Summary")
+    status_label = "REPORTED" if status == "reported" else "NOT REPORTED"
+    summary.write("A1", f"Assam MDM Previous Report — {status_label}", title)
+    summary.write("A3", "Report Date", label); summary.write("B3", data["reportDate"], value)
+    summary.write("A4", "Type", label); summary.write("B4", status_label, value)
+    summary.write("A6", "Meaning", label)
+    summary.write(
+        "B6",
+        ("District / Block / Cluster: Reported means 0 pending schools (100% complete). "
+         "School: Reported means Daily Status Yes.")
+        if status == "reported" else
+        ("District / Block / Cluster: Not Reported means one or more pending schools. "
+         "School: Not Reported means Daily Status No."),
+        info
+    )
+    summary.write("A8", "District rows", label); summary.write_number("B8", len(data["rows"]["district"]), value)
+    summary.write("A9", "Block rows", label); summary.write_number("B9", len(data["rows"]["block"]), value)
+    summary.write("A10", "Cluster rows", label); summary.write_number("B10", len(data["rows"]["cluster"]), value)
+    summary.write("A11", "School rows", label); summary.write_number("B11", len(data["rows"]["school"]), value)
+
+    summary.write("D3", "District Source", label); summary.write("E3", data["sources"].get("district","—"), value)
+    summary.write("D4", "Block Source", label); summary.write("E4", data["sources"].get("block","—"), value)
+    summary.write("D5", "Cluster Source", label); summary.write("E5", data["sources"].get("cluster","—"), value)
+    summary.write("D6", "School Source", label); summary.write("E6", data["sources"].get("school","—"), value)
+
+    if data["warnings"]:
+        summary.write("A13", "Data Availability / Quality Notes", label)
+        for row_num, warning in enumerate(data["warnings"], start=14):
+            summary.merge_range(row_num-1, 0, row_num-1, 5, warning, warn)
+
+    summary.set_column("A:A", 24)
+    summary.set_column("B:B", 64)
+    summary.set_column("C:C", 3)
+    summary.set_column("D:D", 19)
+    summary.set_column("E:E", 31)
+
+    districts = []
+    for r in data["rows"]["district"]:
+        total = to_int(r.get("totalSchools")); reported = to_int(r.get("dailyReported")); pending = to_int(r.get("dailyNotReported"))
+        districts.append([r.get("district"), r.get("districtCode"), total, reported, pending,
+                          round((reported * 100 / total) if total else 0, 2), to_int(r.get("mealsServed"))])
+    _xlsx_sheet(workbook, "Districts",
+        ["District","District Code","Total Schools","Reported Schools","Pending Schools","Reporting %","Meals Served"],
+        districts, [25,14,14,16,15,13,16], "No districts match this status.")
+
+    blocks = []
+    for r in data["rows"]["block"]:
+        total = to_int(r.get("totalSchools")); reported = to_int(r.get("dailyReported")); pending = to_int(r.get("dailyNotReported"))
+        blocks.append([r.get("districtName"),r.get("districtCode"),r.get("entityName"),r.get("entityCode"),
+                       total,reported,pending,round((reported*100/total) if total else 0,2),to_int(r.get("mealsServed"))])
+    _xlsx_sheet(workbook, "Blocks",
+        ["District","District Code","Block","Block Code","Total Schools","Reported Schools","Pending Schools","Reporting %","Meals Served"],
+        blocks, [22,14,24,15,14,16,15,13,16],
+        "No tracker snapshot exists for this date, or no blocks match this status.")
+
+    clusters = []
+    for r in data["rows"]["cluster"]:
+        total = to_int(r.get("totalSchools")); reported = to_int(r.get("dailyReported")); pending = to_int(r.get("dailyNotReported"))
+        clusters.append([r.get("districtName"),r.get("districtCode"),r.get("blockName"),r.get("blockCode"),
+                         r.get("entityName"),r.get("entityCode"),total,reported,pending,
+                         round((reported*100/total) if total else 0,2),to_int(r.get("mealsServed"))])
+    _xlsx_sheet(workbook, "Clusters",
+        ["District","District Code","Block","Block Code","Cluster","Cluster Code","Total Schools","Reported Schools","Pending Schools","Reporting %","Meals Served"],
+        clusters, [21,14,22,15,25,18,14,16,15,13,16],
+        "No tracker snapshot exists for this date, or no clusters match this status.")
+
+    schools = []
+    for r in data["rows"]["school"]:
+        schools.append([
+            r.get("district") or r.get("districtName"), r.get("districtCode"),
+            r.get("block") or r.get("blockName"), r.get("blockCode"),
+            r.get("cluster") or r.get("clusterName"), r.get("clusterCode"),
+            r.get("school"), r.get("schoolCode"), r.get("shift"), r.get("dailyStatus"),
+            to_int(r.get("enrolled")), to_int(r.get("mealsServed"))
+        ])
+    school_note = (
+        "Exact names of all Reported schools were not stored for this date. "
+        "The workbook intentionally does not substitute today's school status."
+        if status == "reported" else
+        "No completed school-gap capture exists for this date, or no schools match Not Reported."
+    )
+    _xlsx_sheet(workbook, "Schools",
+        ["District","District Code","Block","Block Code","Cluster","Cluster Code","School Name","School Code","Shift","Daily Status","Enrolled","Meals Served"],
+        schools, [21,14,22,15,24,18,38,18,8,13,12,14], school_note)
+
+    workbook.close()
+    output.seek(0)
+    return output
+
+
+@app.get("/api/report/previous.xlsx")
+def previous_status_xlsx():
+    try:
+        report_date = request.args.get("date")
+        status = request.args.get("status", "").strip().lower()
+        if not report_date:
+            return jsonify({"ok": False, "error": "date is required in DD/MM/YYYY format"}), 400
+        if status not in {"reported","not_reported"}:
+            return jsonify({"ok": False, "error": "status must be reported or not_reported"}), 400
+        output = build_previous_status_workbook(report_date, status)
+        safe_date = report_date.replace("/", "-")
+        label = "Reported" if status == "reported" else "Not_Reported"
+        return Response(
+            output.getvalue(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="Assam_MDM_{label}_{safe_date}.xlsx"'}
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 
 
 @app.get("/api/report/poor.csv")

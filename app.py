@@ -193,7 +193,7 @@ PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
 PUBLIC_BLOCK_HISTORY_URL = "https://mdmhp.nic.in/Home/BlockWiseSummary"
 PUBLIC_CLUSTER_HISTORY_URL = "https://mdmhp.nic.in/Home/ClusterWiseSummary"
 PUBLIC_SCHOOL_HISTORY_URL = "https://mdmhp.nic.in/Home/SchoolWiseSummary"
-PUBLIC_HISTORY_CACHE_VERSION = "v6.6-public-hierarchy"
+PUBLIC_HISTORY_CACHE_VERSION = "v6.6.1-school-parser"
 
 
 def normalize_district_name(value):
@@ -794,7 +794,8 @@ def fetch_public_hierarchy_page(
         text = BeautifulSoup(resp.text, "html.parser").get_text(" ", strip=True)
         short = re.sub(r"\s+", " ", text)[:260]
         raise RuntimeError(
-            f"Public historical {level} response returned no report rows for {report_date}."
+            f"Public historical {level} response returned no report rows for {report_date}. "
+            f"Expected the official {level}-wise table."
             + (f" Source message: {short}" if short else "")
         )
 
@@ -890,9 +891,63 @@ def _extract_numeric_code_from_row(tr, min_digits=5):
     return nums[-1] if nums else None
 
 
+def _split_historical_school_name_shift(value):
+    """School page format:
+    '1126 NO. ADALBARI SHRIPUR LPS- [Shift ID:1]'
+    """
+    raw = str(value or "").strip()
+    m = re.search(r"\s*-\s*\[\s*Shift\s*ID\s*:\s*([^\]]+)\]\s*$", raw, flags=re.I)
+    if not m:
+        return raw, ""
+    shift = m.group(1).strip()
+    name = raw[:m.start()].strip()
+    return name, shift
+
+
+def _normalize_school_match_name(value):
+    return re.sub(r"[^A-Z0-9]+", "", str(value or "").upper())
+
+
+def _enrich_historical_school_codes(rows, district_code, block_code, cluster_code):
+    """Historical public table does not expose schoolCode.
+    Match rows against the current public school master/status page for the same cluster.
+    This adds codes when the school name + shift match, without blocking history if enrichment fails.
+    """
+    try:
+        live_rows = parse_schools(
+            str(district_code), str(block_code), str(cluster_code)
+        )
+    except Exception:
+        return rows
+
+    by_name_shift = {}
+    by_name = {}
+    for r in live_rows:
+        name_key = _normalize_school_match_name(r.get("school"))
+        shift_key = str(r.get("shift") or "").strip()
+        if not name_key:
+            continue
+        by_name_shift[(name_key, shift_key)] = str(r.get("schoolCode") or "")
+        by_name.setdefault(name_key, []).append(str(r.get("schoolCode") or ""))
+
+    for row in rows:
+        if row.get("schoolCode"):
+            continue
+        name_key = _normalize_school_match_name(row.get("school"))
+        shift_key = str(row.get("shift") or "").strip()
+        code = by_name_shift.get((name_key, shift_key))
+        if not code:
+            candidates = [x for x in by_name.get(name_key, []) if x]
+            if len(set(candidates)) == 1:
+                code = candidates[0]
+        row["schoolCode"] = code or ""
+    return rows
+
+
 def parse_official_summary_html(html, level, district_code=None, block_code=None, cluster_code=None):
     soup = BeautifulSoup(html, "html.parser")
     rows = []
+
     for tr in soup.select("table tbody tr"):
         cells = clean_cells(tr)
         if not cells:
@@ -904,14 +959,17 @@ def parse_official_summary_html(html, level, district_code=None, block_code=None
             name = cells[1].strip()
             if not name:
                 continue
+
             if level == "district":
                 code = _extract_href_code(tr, "districtCode")
             elif level == "block":
                 code = _extract_href_code(tr, "blockCode")
             else:
                 code = _extract_href_code(tr, "clusterCode")
+
             if not code:
                 code = _extract_numeric_code_from_row(tr, 5) or name
+
             rows.append({
                 level: name,
                 f"{level}Code": str(code),
@@ -925,30 +983,61 @@ def parse_official_summary_html(html, level, district_code=None, block_code=None
             })
             continue
 
-        # Historical SchoolReports follows the same visible layout as the live school table:
-        # School, Shift, Monthly status, Enrolled, Daily status, Meals served.
-        if level == "school" and len(cells) >= 7:
-            school_name = cells[1].strip()
-            if not school_name:
-                continue
-            code = (
-                _extract_href_code(tr, "schoolCode")
-                or _extract_numeric_code_from_row(tr, 8)
-                or f"{cluster_code or 'cluster'}:{cells[2]}:{school_name}"
-            )
-            rows.append({
-                "school": school_name,
-                "schoolCode": str(code),
-                "shift": cells[2],
-                "monthlyStatus": cells[3],
-                "enrolled": to_int(cells[4]),
-                "dailyStatus": cells[5],
-                "mealsServed": to_int(cells[6]),
-            })
+        if level == "school":
+            # Confirmed historical School-wise layout:
+            # 0 Sr.No
+            # 1 School name + "- [Shift ID:1]"
+            # 2 Monthly Reported (Yes/No)
+            # 3 Enrolled
+            # 4 Daily Reported (Yes/No)
+            # 5 Meals Served
+            if len(cells) >= 6:
+                raw_school = cells[1].strip()
+                if not raw_school:
+                    continue
+
+                school_name, embedded_shift = _split_historical_school_name_shift(raw_school)
+
+                # Some variants can expose a separate Shift column.
+                if len(cells) >= 7:
+                    separate_shift = cells[2].strip()
+                    if re.fullmatch(r"\d+", separate_shift or ""):
+                        shift = separate_shift
+                        monthly_status = cells[3]
+                        enrolled = cells[4]
+                        daily_status = cells[5]
+                        meals_served = cells[6]
+                    else:
+                        shift = embedded_shift
+                        monthly_status = cells[2]
+                        enrolled = cells[3]
+                        daily_status = cells[4]
+                        meals_served = cells[5]
+                else:
+                    shift = embedded_shift
+                    monthly_status = cells[2]
+                    enrolled = cells[3]
+                    daily_status = cells[4]
+                    meals_served = cells[5]
+
+                code = _extract_href_code(tr, "schoolCode") or ""
+
+                rows.append({
+                    "school": school_name,
+                    "schoolCode": str(code),
+                    "shift": shift or "1",
+                    "monthlyStatus": str(monthly_status).strip(),
+                    "enrolled": to_int(enrolled),
+                    "dailyStatus": str(daily_status).strip(),
+                    "mealsServed": to_int(meals_served),
+                })
+
+    if level == "school" and rows and district_code and block_code and cluster_code:
+        rows = _enrich_historical_school_codes(
+            rows, district_code, block_code, cluster_code
+        )
 
     return rows
-
-
 def official_target(level, district_code=None, block_code=None, cluster_code=None):
     if level == "district":
         return f"{REPORTS_BASE}/DistrictReports", {"stateCode": STATE_CODE}
@@ -1883,7 +1972,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.6", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.6.1", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")

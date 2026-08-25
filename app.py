@@ -1708,7 +1708,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.4", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.4.1", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -1985,12 +1985,19 @@ def analytics_insights_route():
 # -------------------- PREVIOUS REPORT EXCEL --------------------
 
 def _previous_status_matches(level, row, status):
-    """Aggregate: Reported = 100% complete. School: Reported = Daily Status Yes."""
+    """V6.4.1 status logic:
+    - District/Block/Cluster Reported: at least one school reported.
+    - District/Block/Cluster Not Reported: at least one school still pending.
+    - School Reported/Not Reported: Daily Status Yes/No.
+    A partially reporting aggregate can therefore appear in BOTH workbooks, which is intentional.
+    """
     if level == "school":
         is_reported = str(row.get("dailyStatus") or "").strip().lower() == "yes"
+        is_not_reported = not is_reported
     else:
-        is_reported = to_int(row.get("dailyNotReported")) == 0 and to_int(row.get("totalSchools")) > 0
-    return is_reported if status == "reported" else not is_reported
+        is_reported = to_int(row.get("dailyReported")) > 0
+        is_not_reported = to_int(row.get("dailyNotReported")) > 0
+    return is_reported if status == "reported" else is_not_reported
 
 
 def _previous_tracker_rows(report_date, level):
@@ -2192,10 +2199,12 @@ def build_previous_status_workbook(report_date, status):
     summary.write("A6", "Meaning", label)
     summary.write(
         "B6",
-        ("District / Block / Cluster: Reported means 0 pending schools (100% complete). "
+        ("District / Block / Cluster: Reported means at least one school reported. "
+         "A partially reporting area can also appear in Not Reported if some schools are still pending. "
          "School: Reported means Daily Status Yes.")
         if status == "reported" else
-        ("District / Block / Cluster: Not Reported means one or more pending schools. "
+        ("District / Block / Cluster: Not Reported means at least one school is still pending. "
+         "A partially reporting area can also appear in Reported if some schools already reported. "
          "School: Not Reported means Daily Status No."),
         info
     )

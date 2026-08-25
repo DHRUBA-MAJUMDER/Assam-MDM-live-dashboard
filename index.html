@@ -51,18 +51,31 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 @media(max-width:900px){.prev-toolbar{grid-template-columns:1fr}.prev-trend-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:520px){.prev-trend-grid{grid-template-columns:1fr}}
 
+
+/* V6.3 loading + school performance */
+.page-progress{height:4px;background:#e6ebf3;border-radius:99px;overflow:hidden;margin:-7px 0 14px;display:none}
+.page-progress.show{display:block}.page-progress i{display:block;height:100%;width:0;background:var(--blue);transition:width .25s ease}
+.capture-progress{display:none;margin:12px 0 0}.capture-progress.show{display:block}
+.capture-track{height:11px;border-radius:999px;background:#e8edf5;overflow:hidden}.capture-track i{display:block;height:100%;width:0;background:var(--blue);transition:width .25s ease}
+.capture-meta{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-size:10px;color:var(--muted)}
+.daychips{display:flex;gap:5px;flex-wrap:wrap;min-width:260px}.daychip{border-radius:7px;padding:4px 6px;font-size:9px;font-weight:800;border:1px solid var(--line)}
+.daychip.ok{background:#edf9f0;color:#167238;border-color:#cbead3}.daychip.gap{background:#fff0f0;color:#a12626;border-color:#f1c7c7}
+.school-name{font-weight:800}.school-code{font-size:9px;color:var(--muted);margin-top:3px}
+.rate-good{color:var(--green);font-weight:800}.rate-mid{color:#ad7416;font-weight:800}.rate-low{color:var(--red);font-weight:800}
+.source-warning{padding:10px 12px;border-radius:10px;background:#fff8e7;border:1px solid #ead9aa;color:#805d10;font-size:10px;margin-top:9px}
+
 </style>
 </head>
 <body>
 <div class="shell">
 <aside class="sidebar">
- <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Analytics, Verified History & Tracker</p></div></div>
+ <div class="brand"><div class="logo">MDM</div><div><h1>Assam MDM</h1><p>Clear Performance Tracker & Verified History</p></div></div>
  <nav>
   <button class="navbtn active" data-view="executive">Executive Dashboard</button>
   <button class="navbtn" data-view="drill">Drill-down</button>
   <button class="navbtn" data-view="meals">Meals Served</button>
   <button class="navbtn" data-view="tracker">30m Tracker</button>
-  <button class="navbtn" data-view="history">3–7 Day Performance</button>
+  <button class="navbtn" data-view="history">Performance Follow-up</button>
   <button class="navbtn" data-view="previous">Previous Reports</button>
   <button class="navbtn" data-view="compare">Compare</button>
   <button class="navbtn" data-view="reports">Reports</button>
@@ -74,7 +87,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
  <div><div class="eyebrow">ASSAM • STATE CODE 18 • LIVE MDMHP</div><h2>Meal Served Reporting Analytics</h2></div>
  <div class="topright"><span id="reportDate">Report date: —</span><span id="updated">Not refreshed yet</span><button id="refresh" class="btn primary">Refresh</button></div>
 </header>
-<div id="notice" class="notice"></div><div id="loader" class="loader">Loading live data…</div>
+<div id="notice" class="notice"></div><div id="loader" class="loader">Loading live data…</div><div id="pageProgress" class="page-progress"><i id="pageProgressBar"></i></div>
 
 <!-- EXECUTIVE -->
 <section id="view-executive" class="view active">
@@ -142,21 +155,58 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
 </section>
 
 
-<!-- 3–7 DAY HISTORY -->
+<!-- PERFORMANCE FOLLOW-UP -->
 <section id="view-history" class="view">
- <section class="panel"><div class="phead"><div><h3>3–7 Day Poor Performance Review</h3><p>Find districts, blocks, clusters and schools that repeatedly remain incomplete.</p></div><button id="schoolGapNow" class="btn warn">Capture Today's School Gaps</button></div><div class="filters">
-  <div class="field"><label>Period</label><select id="histDays"><option value="3">Last 3 available days</option><option value="5">Last 5 available days</option><option value="7" selected>Last 7 available days</option></select></div>
-  <div class="field"><label>Level</label><select id="histLevel"><option value="district">District</option><option value="block">Block</option><option value="cluster">Cluster</option><option value="school">School</option></select></div>
-  <div class="field"><label>District filter</label><select id="histDistrict"><option value="">All districts</option></select></div>
-  <div class="field"><label>Block filter</label><select id="histBlock" disabled><option value="">All blocks</option></select></div>
- </div><div class="pbody"><div class="simple-note">District history now uses the public official date-wise report, so 3–7 day district analysis works immediately and skips all-zero non-reporting days. Block and cluster history still uses stored tracker snapshots; school history uses daily school-gap captures.</div></div></section>
+ <section class="panel">
+  <div class="phead">
+   <div>
+    <h3>Performance Follow-up</h3>
+    <p>Choose one level. The table changes to show only the information useful for that level.</p>
+   </div>
+   <button id="schoolGapNow" class="btn warn">Capture Today’s School Status</button>
+  </div>
+  <div class="filters">
+   <div class="field"><label>Review period</label><select id="histDays"><option value="3">Last 3 available days</option><option value="5">Last 5 available days</option><option value="7" selected>Last 7 available days</option></select></div>
+   <div class="field"><label>What do you want to review?</label><select id="histLevel"><option value="district">Districts</option><option value="block">Blocks</option><option value="cluster">Clusters</option><option value="school">Schools</option></select></div>
+   <div class="field"><label>District</label><select id="histDistrict"><option value="">All districts</option></select></div>
+   <div class="field"><label>Block</label><select id="histBlock" disabled><option value="">All blocks</option></select></div>
+  </div>
+  <div class="pbody">
+   <div id="histExplain" class="simple-note">
+    District performance uses previous official date-wise reports. Choose School to see exactly which captured days each school was Reported or Not Reported.
+   </div>
+   <div id="schoolCaptureProgress" class="capture-progress">
+    <div class="capture-track"><i id="schoolCaptureBar"></i></div>
+    <div class="capture-meta"><span id="schoolCaptureText">Preparing…</span><b id="schoolCapturePct">0%</b></div>
+   </div>
+  </div>
+ </section>
+
  <div class="history-cards">
-  <div class="card"><span>Days Observed Available</span><strong id="hDays">—</strong><small id="hDates">—</small></div>
-  <div class="card"><span>Entities Needing Follow-up</span><strong class="red" id="hCount">—</strong></div>
-  <div class="card"><span>Repeat Problems</span><strong class="amber" id="hRepeat">—</strong><small>Incomplete on 2+ available days</small></div>
-  <div class="card"><span>Latest School Gap Capture</span><strong id="hSchoolRun">—</strong><small id="hSchoolRunSub">Daily capture builds school history</small></div>
+  <div class="card"><span>Days Checked</span><strong id="hDays">—</strong><small id="hDates">—</small></div>
+  <div class="card"><span>Needs Follow-up</span><strong class="red" id="hCount">—</strong></div>
+  <div class="card"><span>Repeated Problems</span><strong class="amber" id="hRepeat">—</strong><small>Problem on 2+ checked days</small></div>
+  <div class="card"><span>Latest School Capture</span><strong id="hSchoolRun">—</strong><small id="hSchoolRunSub">School history is built from completed daily captures</small></div>
  </div>
- <section class="panel"><div class="phead"><div><h3 id="histTitle">Poor-performing Districts</h3><p id="histSub">Ranked by repeated incomplete reporting, then average reporting completion.</p></div><div class="download-row"><input id="histSearch" class="search" placeholder="Search..."><a id="histDownload" class="btn primary download" href="/api/report/poor.csv?days=7&level=district">Download Simple CSV</a></div></div><div class="tablewrap"><table><thead id="histHead"></thead><tbody id="histBody"></tbody></table></div></section>
+
+ <section class="panel">
+  <div class="phead">
+   <div><h3 id="histTitle">District Follow-up</h3><p id="histSub">Loading…</p></div>
+   <div class="download-row"><input id="histSearch" class="search" placeholder="Search name / code..."><a id="histDownload" class="btn primary download" href="#">Download CSV</a></div>
+  </div>
+  <div class="tablewrap"><table><thead id="histHead"></thead><tbody id="histBody"></tbody></table></div>
+ </section>
+
+ <section class="panel" id="schoolLegendPanel" style="display:none">
+  <div class="phead"><div><h3>How School Day Status Works</h3><p>Simple interpretation of completed daily gap captures.</p></div></div>
+  <div class="pbody">
+   <div class="simple-note">
+    <b>Green = Reported:</b> that school was not found in the pending-school list when the complete daily capture finished.
+    <b style="margin-left:8px">Red = Not Reported:</b> the school was explicitly found pending that day.
+    The school table lists schools that had at least one pending day in the selected period.
+   </div>
+  </div>
+ </section>
 </section>
 
 
@@ -174,7 +224,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
    <button id="prevReset" class="btn soft">Back to Districts</button>
   </div>
   <div class="pbody">
-   <div class="simple-note" id="prevAvailability">Public district reports are fetched directly when available and cached automatically. V6.1 does not impose a 5 PM restriction.</div><div class="simple-note" style="margin-top:9px"><b>V6.1 scope:</b> previous District reports + District 3/5/7-day trend are connected to the public endpoint. Historical Block / Cluster / School drill-down is intentionally not guessed; live drill-down remains fully available.</div>
+   <div class="simple-note" id="prevAvailability">Previous district reports are checked against stored live tracker data. If the public source returns an all-zero date but the tracker captured real reporting, the dashboard uses the clearly-labelled Tracker Final Snapshot instead.</div><div class="simple-note" style="margin-top:9px"><b>V6.1 scope:</b> previous District reports + District 3/5/7-day trend are connected to the public endpoint. Historical Block / Cluster / School drill-down is intentionally not guessed; live drill-down remains fully available.</div>
   </div>
  </section>
 
@@ -226,7 +276,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=block">7-Day Block Follow-up</a>
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=cluster">7-Day Cluster Follow-up</a>
   <a class="btn soft download" href="/api/report/poor.csv?days=7&level=school">7-Day School Follow-up</a>
- </div><p class="history-note">Historical reports become more useful as tracker days accumulate. School history starts from the first daily school-gap capture after this version is deployed.</p></div></section>
+ </div><p class="history-note">School follow-up CSV now includes School Name, School Code, District, Block, Cluster and a separate Reported / Not Reported status column for every captured day.</p></div></section>
  <section class="panel"><div class="phead"><div><h3>How “Poor Performance” Is Flagged</h3><p>Simple, transparent dashboard rules — not official policy cut-offs.</p></div></div><div class="pbody"><div class="grid3"><div class="mini"><span>High attention</span><strong>Repeated incomplete reporting</strong></div><div class="mini"><span>Needs follow-up</span><strong>Incomplete on multiple days</strong></div><div class="mini"><span>One-day gap</span><strong>Watch, but not repeated yet</strong></div></div><p class="history-note">For districts, blocks and clusters, ranking focuses on days with pending schools, average reporting %, worst reporting %, and pending counts. For schools, ranking focuses on how many available days the school remained not reported.</p></div></section>
 </section>
 </main></div>
@@ -238,8 +288,20 @@ const fmt=n=>Number(n||0).toLocaleString('en-IN');
 const pct=(a,b)=>b?Number(a||0)/Number(b)*100:0;
 const dt=s=>s?new Date(s).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
 function notice(msg,type='err'){const n=$('#notice');if(!msg){n.className='notice';n.textContent='';return}n.className='notice '+type;n.textContent=msg}
-function loading(v){$('#loader').classList.toggle('show',v)}
+let progressTimer=null,progressValue=0,activeRequests=0;
+function progressStart(){
+ activeRequests++;
+ if(activeRequests>1)return;
+ const w=$('#pageProgress'),b=$('#pageProgressBar');w.classList.add('show');progressValue=8;b.style.width=progressValue+'%';
+ clearInterval(progressTimer);progressTimer=setInterval(()=>{if(progressValue<88){progressValue+=Math.max(1,(88-progressValue)*0.08);b.style.width=progressValue+'%'}},180)
+}
+function progressDone(){
+ activeRequests=Math.max(0,activeRequests-1);if(activeRequests>0)return;
+ clearInterval(progressTimer);const w=$('#pageProgress'),b=$('#pageProgressBar');b.style.width='100%';setTimeout(()=>{w.classList.remove('show');b.style.width='0%';progressValue=0},260)
+}
+function loading(v){$('#loader').classList.toggle('show',v);if(v)progressStart();else progressDone()}
 async function jget(url,opts={}){loading(true);notice('');try{const r=await fetch(url,{headers:{Accept:'application/json'},...opts});const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(`Backend returned HTTP ${r.status} instead of JSON.`)}if(!r.ok||!j.ok)throw new Error(j.error||`Request failed (${r.status})`);return j}finally{loading(false)}}
+async function silentJson(url,opts={}){const r=await fetch(url,{headers:{Accept:'application/json'},...opts});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||`Request failed (${r.status})`);return j}
 async function districts(force=false){if(districtCache&&!force)return districtCache;const j=await jget('/api/districts');districtCache=j.data;reportDate=j.reportDate||'—';$('#reportDate').textContent='Report date: '+reportDate;return districtCache}
 async function blocks(dc,force=false){if(blockCache.has(dc)&&!force)return blockCache.get(dc);const j=await jget('/api/blocks?districtCode='+encodeURIComponent(dc));blockCache.set(dc,j.data);return j.data}
 async function clusters(dc,bc,force=false){const k=dc+'|'+bc;if(clusterCache.has(k)&&!force)return clusterCache.get(k);const j=await jget(`/api/clusters?districtCode=${encodeURIComponent(dc)}&blockCode=${encodeURIComponent(bc)}`);clusterCache.set(k,j.data);return j.data}
@@ -321,7 +383,12 @@ function prevSetCards(rows,level,label,name){
  const s=prevScopeSummary(rows,level);$('#prevLevel').textContent=label;$('#prevName').textContent=name||'Assam';$('#prevSchools').textContent=fmt(s.schools);$('#prevPending').textContent=fmt(s.pending);$('#prevMeals').textContent=fmt(s.meals);
 }
 function prevSourceBadge(source){
- const el=$('#prevSource');el.className='prev-source'+(source==='archive'?' archive':'');el.textContent=source==='archive'?'Saved Archive':'Public Official Source';
+ const el=$('#prevSource');
+ const src=source||'unknown';
+ el.className='prev-source'+(src==='archive'?' archive':'');
+ if(src==='tracker-final-snapshot')el.textContent='Tracker Final Snapshot';
+ else if(src==='archive')el.textContent='Saved Archive';
+ else el.textContent='Public Official Source';
 }
 function prevBreadcrumb(){
  const b=[`<button class="prev-crumb" data-prev-level="district">Assam / Districts</button>`];
@@ -338,7 +405,7 @@ async function prevPage(level,opts={}){
  const j=await jget(url);return j.data;
 }
 function prevRenderSummary(data){
- const rows=data.rows||[],level=data.level;prevSourceBadge(data.source);prevBreadcrumb();
+ const rows=data.rows||[],level=data.level;prevSourceBadge(data.dataSource||data.source);prevBreadcrumb();if(data.dataQualityWarning)notice(data.dataQualityWarning,'info');
  if(level==='district'){
   $('#prevTitle').textContent=`District Report — ${data.reportDate}`;$('#prevCrumb').textContent='Assam';
   $('#prevHead').innerHTML='<tr><th>District</th><th>Total Schools</th><th>Reported</th><th>Pending</th><th>Reporting %</th><th>Meals Served</th></tr>';
@@ -419,7 +486,7 @@ async function loadPreviousTrend(refresh=false){
     warningHtml;
 
   $('#prevTrendBody').innerHTML=x.points.map(p=>p.available
-    ?`<tr><td>${p.date}</td><td>${fmt(p.totalSchools)}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='archive'?'Saved Archive':'Public Official Source'}</td></tr>`
+    ?`<tr><td>${p.date}</td><td>${fmt(p.totalSchools)}</td><td>${p.reportingPct.toFixed(2)}%</td><td>${fmt(p.reported)}</td><td class="red">${fmt(p.pending)}</td><td>${fmt(p.mealsServed)}</td><td>${p.source==='tracker-final-snapshot'?'Tracker Final Snapshot':p.source==='archive'?'Saved Archive':'Public Official Source'}</td></tr>`
     :`<tr><td>${p.date}</td><td colspan="6" class="empty">Not available${p.error?' • '+p.error:''}</td></tr>`
   ).join('');
 
@@ -433,13 +500,139 @@ $('#prevTrendRefresh').addEventListener('click',()=>loadPreviousTrend(true));
 // SMART INSIGHTS
 async function loadSmartInsights(){try{const j=await jget('/api/analytics/insights'),items=j.data.items||[];$('#smartInsights').innerHTML=items.length?items.map(x=>`<div class="insight ${x.kind}"><b>${x.title}</b><p>${x.text}</p></div>`).join(''):'<div class="empty">Take at least two tracker snapshots to generate automatic insights.</div>'}catch(e){$('#smartInsights').innerHTML='<div class="empty">Tracker insights are not available yet.</div>'}}
 
-// 3–7 DAY PERFORMANCE HISTORY
-async function initHistory(){try{const ds=await districts();fill($('#histDistrict'),ds,'districtCode','district','All districts');await historyStatus();await loadHistory()}catch(e){notice(e.message)}}
-async function historyStatus(){try{const j=await jget('/api/history/status');$('#hSchoolRun').textContent=j.latestSchoolGap?dt(j.latestSchoolGap.capturedAt):'Not captured';$('#hSchoolRunSub').textContent=j.latestSchoolGap?`${j.latestSchoolGap.gapSchools} schools not reported • ${j.latestSchoolGap.reportDate}`:'Click “Capture Today’s School Gaps” once after deployment.'}catch(e){$('#hSchoolRun').textContent='Unavailable'}}
-async function histFiltersChanged(){const level=$('#histLevel').value,dc=$('#histDistrict').value;$('#histDistrict').disabled=false;$('#histBlock').disabled=!(level==='cluster'||level==='school')||!dc;if((level==='cluster'||level==='school')&&dc){const bs=await blocks(dc);fill($('#histBlock'),bs,'blockCode','block','All blocks')}else{$('#histBlock').innerHTML='<option value="">All blocks</option>'}await loadHistory()}
-async function loadHistory(){const days=$('#histDays').value,level=$('#histLevel').value,dc=$('#histDistrict').value,bc=$('#histBlock').value;let url=`/api/history/poor?days=${days}&level=${level}&limit=300`;if(dc)url+='&districtCode='+encodeURIComponent(dc);if(bc)url+='&blockCode='+encodeURIComponent(bc);const j=await jget(url),x=j.data;$('#hDays').textContent=x.daysTracked;$('#hDates').textContent=x.dates?.length?x.dates.join(', '):'No history yet';$('#hCount').textContent=fmt(x.rows.length);const repeat=x.rows.filter(r=>(level==='school'?r.missedDays:r.incompleteDays)>=2).length;$('#hRepeat').textContent=fmt(repeat);$('#histDownload').href=`/api/report/poor.csv?days=${days}&level=${level}${dc?'&districtCode='+encodeURIComponent(dc):''}${bc?'&blockCode='+encodeURIComponent(bc):''}`;const label=level[0].toUpperCase()+level.slice(1);$('#histTitle').textContent=`Poor-performing ${label}${level==='school'?'s':'s'} — Last ${x.daysTracked||days} Days Observed`;if(level==='school'){ $('#histSub').textContent='Schools are ranked by how many daily school-gap captures found them still not reported.';$('#histHead').innerHTML='<tr><th>School</th><th>District / Block / Cluster</th><th>Days Not Reported</th><th>Not Reported Rate</th><th>Last Gap</th><th>Follow-up</th></tr>';$('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr><td><b>${r.entityName}</b><div style="font-size:9px;color:var(--muted)">${r.entityCode}</div></td><td>${r.districtName||''} / ${r.blockName||''} / ${r.clusterName||''}</td><td class="bad">${r.missedDays} of ${x.daysTracked}</td><td>${r.missRate.toFixed(1)}%</td><td>${r.lastGapDate||'—'}</td><td><span class="status-text ${r.missedDays>=2?'red':'amber'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No school gaps stored for this period yet.</td></tr>';}else{$('#histSub').textContent='Ranked first by repeated days with pending schools, then by average reporting completion.';$('#histHead').innerHTML=`<tr><th>${label}</th><th>Location</th><th>Days With Pending</th><th>Avg. Reporting</th><th>Lowest Reporting</th><th>Avg. Pending</th><th>Highest Pending</th><th>Follow-up</th></tr>`;$('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr><td><b>${r.entityName}</b></td><td>${level==='district'?'Assam':(r.districtName||'')+(level==='cluster'?' / '+(r.blockName||''):'')}</td><td class="bad">${r.incompleteDays} of ${r.daysTracked}</td><td>${r.avgReportingPct.toFixed(2)}%</td><td class="bad">${r.worstReportingPct.toFixed(2)}%</td><td>${r.avgPending.toFixed(1)}</td><td>${fmt(r.maxPending)}</td><td><span class="status-text ${r.status==='High attention'?'red':'amber'}">${r.status}</span></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No poor performers found in the stored history.</td></tr>';}}
-$('#histDays').addEventListener('change',loadHistory);$('#histLevel').addEventListener('change',histFiltersChanged);$('#histDistrict').addEventListener('change',histFiltersChanged);$('#histBlock').addEventListener('change',loadHistory);bindSearch('#histSearch','#histBody');
-$('#schoolGapNow').addEventListener('click',async()=>{try{$('#schoolGapNow').disabled=true;notice('Capturing today’s schools that are still not reported. Only incomplete clusters are opened, so this is lighter than crawling every school.','info');const j=await jget('/api/history/school-gaps/run?source=dashboard',{method:'POST'});notice(`School gap capture saved: ${j.data.gapSchools} schools still not reported across ${j.data.incompleteClusters} incomplete clusters.`,'info');await historyStatus();if($('#histLevel').value==='school')await loadHistory()}catch(e){notice(e.message)}finally{$('#schoolGapNow').disabled=false}});
+// PERFORMANCE FOLLOW-UP
+async function initHistory(){
+ try{
+  const ds=await districts();
+  fill($('#histDistrict'),ds,'districtCode','district','All districts');
+  await historyStatus();
+  await histFiltersChanged(false);
+ }catch(e){notice(e.message)}
+}
+async function historyStatus(){
+ try{
+  const j=await jget('/api/history/status');
+  $('#hSchoolRun').textContent=j.latestSchoolGap?dt(j.latestSchoolGap.capturedAt):'Not captured';
+  $('#hSchoolRunSub').textContent=j.latestSchoolGap
+   ?`${j.latestSchoolGap.gapSchools} schools pending • ${j.latestSchoolGap.reportDate}`
+   :'Run a school status capture after reporting has substantially completed.';
+ }catch(e){$('#hSchoolRun').textContent='Unavailable'}
+}
+function historyExplanation(level){
+ const map={
+  district:'District: uses previous official date-wise reports. State-wide zero-reporting days are excluded from performance averages.',
+  block:'Block: uses the last stored tracker snapshot for each available reporting day.',
+  cluster:'Cluster: uses the last stored tracker snapshot for each available reporting day.',
+  school:'School: shows schools that had at least one pending day. Each checked date is shown as green Reported or red Not Reported.'
+ };
+ $('#histExplain').textContent=map[level]||'';
+ $('#schoolLegendPanel').style.display=level==='school'?'block':'none';
+}
+async function histFiltersChanged(load=true){
+ const level=$('#histLevel').value,dc=$('#histDistrict').value;
+ historyExplanation(level);
+ const needsBlock=(level==='cluster'||level==='school');
+ $('#histBlock').disabled=!needsBlock||!dc;
+ if(needsBlock&&dc){
+  const bs=await blocks(dc);fill($('#histBlock'),bs,'blockCode','block','All blocks');
+ }else{
+  $('#histBlock').innerHTML='<option value="">All blocks</option>';
+ }
+ if(load)await loadHistory();
+ else await loadHistory();
+}
+function schoolDayChips(daily=[]){
+ return `<div class="daychips">${daily.map(x=>{
+  const short=x.date?x.date.slice(0,5):'—';
+  return `<span class="daychip ${x.reported?'ok':'gap'}" title="${x.date}: ${x.status}">${short} ${x.reported?'✓':'✕'}</span>`;
+ }).join('')}</div>`;
+}
+async function loadHistory(){
+ const days=$('#histDays').value,level=$('#histLevel').value,dc=$('#histDistrict').value,bc=$('#histBlock').value;
+ let url=`/api/history/poor?days=${days}&level=${level}&limit=500`;
+ if(dc)url+='&districtCode='+encodeURIComponent(dc);
+ if(bc)url+='&blockCode='+encodeURIComponent(bc);
+ const j=await jget(url),x=j.data;
+
+ $('#hDays').textContent=x.daysTracked;
+ $('#hDates').textContent=x.dates?.length?x.dates.join(', '):'No data yet';
+ $('#hCount').textContent=fmt(x.rows.length);
+ const repeat=x.rows.filter(r=>(level==='school'?r.missedDays:r.incompleteDays)>=2).length;
+ $('#hRepeat').textContent=fmt(repeat);
+ $('#histDownload').href=`/api/report/poor.csv?days=${days}&level=${level}${dc?'&districtCode='+encodeURIComponent(dc):''}${bc?'&blockCode='+encodeURIComponent(bc):''}`;
+
+ if(level==='school'){
+  $('#histTitle').textContent=`School Follow-up — ${x.daysTracked} Days Checked`;
+  $('#histSub').textContent=x.note||'Shows exactly which completed capture days each school was pending.';
+  $('#histHead').innerHTML='<tr><th>School</th><th>Location</th><th>Reported Days</th><th>Not Reported Days</th><th>School Reporting Rate</th><th>Day-by-Day</th><th>Follow-up</th></tr>';
+  $('#histBody').innerHTML=x.rows.length?x.rows.map(r=>{
+   const rateClass=r.reportingRate>=90?'rate-good':r.reportingRate>=70?'rate-mid':'rate-low';
+   return `<tr>
+    <td><div class="school-name">${r.entityName||'Unnamed school'}</div><div class="school-code">Code: ${r.entityCode||'—'} • Shift ${r.shift||'1'}</div></td>
+    <td>${r.districtName||'—'}<br><span style="font-size:10px;color:var(--muted)">${r.blockName||'—'} / ${r.clusterName||'—'}</span></td>
+    <td class="green"><b>${r.reportedDays}</b> of ${x.daysTracked}</td>
+    <td class="red"><b>${r.missedDays}</b> of ${x.daysTracked}</td>
+    <td class="${rateClass}">${Number(r.reportingRate||0).toFixed(1)}%</td>
+    <td>${schoolDayChips(r.daily||[])}</td>
+    <td><span class="status-text ${r.status==='High attention'?'red':r.status==='Needs follow-up'?'amber':'green'}">${r.status}</span></td>
+   </tr>`;
+  }).join(''):'<tr><td colspan="7" class="empty">No school had a stored pending gap in the selected captured days.</td></tr>';
+ }else{
+  const label=level[0].toUpperCase()+level.slice(1);
+  $('#histTitle').textContent=`${label} Follow-up — ${x.daysTracked} Days Checked`;
+  $('#histSub').textContent='Simple view: how often reporting stayed incomplete and how low completion went.';
+  $('#histHead').innerHTML=`<tr><th>${label}</th><th>Location</th><th>Incomplete Days</th><th>Average Reporting</th><th>Lowest Reporting</th><th>Average Pending</th><th>Highest Pending</th><th>Follow-up</th></tr>`;
+  $('#histBody').innerHTML=x.rows.length?x.rows.map(r=>`<tr>
+   <td><b>${r.entityName}</b><div style="font-size:9px;color:var(--muted)">${r.entityCode||''}</div></td>
+   <td>${level==='district'?'Assam':(r.districtName||'')+(level==='cluster'?' / '+(r.blockName||''):'')}</td>
+   <td class="bad">${r.incompleteDays} of ${r.daysTracked}</td>
+   <td>${Number(r.avgReportingPct||0).toFixed(2)}%</td>
+   <td class="bad">${Number(r.worstReportingPct||0).toFixed(2)}%</td>
+   <td>${Number(r.avgPending||0).toFixed(1)}</td>
+   <td>${fmt(r.maxPending)}</td>
+   <td><span class="status-text ${r.status==='High attention'?'red':'amber'}">${r.status}</span></td>
+  </tr>`).join(''):'<tr><td colspan="8" class="empty">No repeated incomplete performers found for this period.</td></tr>';
+ }
+}
+$('#histDays').addEventListener('change',loadHistory);
+$('#histLevel').addEventListener('change',()=>histFiltersChanged(true));
+$('#histDistrict').addEventListener('change',()=>histFiltersChanged(true));
+$('#histBlock').addEventListener('change',loadHistory);
+bindSearch('#histSearch','#histBody');
+
+function setSchoolCaptureProgress(show,pct=0,text=''){
+ const wrap=$('#schoolCaptureProgress'),bar=$('#schoolCaptureBar');
+ wrap.classList.toggle('show',show);bar.style.width=Math.max(0,Math.min(100,pct))+'%';
+ $('#schoolCapturePct').textContent=Math.round(pct)+'%';
+ if(text)$('#schoolCaptureText').textContent=text;
+}
+async function pollSchoolCapture(jobId){
+ for(let i=0;i<1800;i++){
+  const j=await silentJson('/api/history/school-gaps/progress?jobId='+encodeURIComponent(jobId));
+  const s=j.data||{};
+  setSchoolCaptureProgress(true,Number(s.progress||0),s.message||'Working…');
+  if(s.status==='done')return s.result;
+  if(s.status==='error')throw new Error(s.error||s.message||'School capture failed.');
+  await new Promise(r=>setTimeout(r,1200));
+ }
+ throw new Error('School capture is taking longer than expected.');
+}
+$('#schoolGapNow').addEventListener('click',async()=>{
+ try{
+  $('#schoolGapNow').disabled=true;
+  setSchoolCaptureProgress(true,1,'Starting school status capture…');
+  notice('School status capture is running. The progress bar shows incomplete clusters being checked.','info');
+  const start=await silentJson('/api/history/school-gaps/start?source=dashboard',{method:'POST'});
+  const result=await pollSchoolCapture(start.data.jobId);
+  setSchoolCaptureProgress(true,100,'Complete');
+  notice(`School capture saved: ${result.gapSchools} schools not reported across ${result.incompleteClusters} incomplete clusters.`,'info');
+  await historyStatus();
+  if($('#histLevel').value==='school')await loadHistory();
+  setTimeout(()=>setSchoolCaptureProgress(false,0,''),1800);
+ }catch(e){notice(e.message);setSchoolCaptureProgress(false,0,'')}
+ finally{$('#schoolGapNow').disabled=false}
+});
+
 
 $('#reportSnapshot').addEventListener('click',()=>setView('tracker'));
 $('#refresh').addEventListener('click',async()=>{try{districtCache=null;blockCache.clear();clusterCache.clear();schoolCache.clear();if(activeView==='executive')await loadExecutive(true);else if(activeView==='drill')await initDrill();else if(activeView==='meals')await initMeals();else if(activeView==='tracker')await initTracker();else if(activeView==='history')await initHistory();else if(activeView==='previous')await initPrevious(true);else if(activeView==='compare')await initCompare();setUpdated()}catch(e){notice(e.message)}});

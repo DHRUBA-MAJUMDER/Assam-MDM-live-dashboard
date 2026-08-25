@@ -7,6 +7,7 @@ import os
 import re
 import threading
 import json
+import uuid
 from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
@@ -27,6 +28,8 @@ HEADERS = {
 TRACKER_LOCK = threading.Lock()
 SCHOOL_GAP_LOCK = threading.Lock()
 OFFICIAL_ARCHIVE_LOCK = threading.Lock()
+SCHOOL_JOB_LOCK = threading.Lock()
+SCHOOL_JOB_STATE = {}
 REPORTS_BASE = "https://mdmhp.nic.in/Reports"
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -184,7 +187,7 @@ def parse_schools(district_code, block_code, cluster_code):
 
 PUBLIC_STATE_REPORT_URL = "https://mdmhp.nic.in/Home/StateWiseSummary/AS"
 PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
-PUBLIC_HISTORY_CACHE_VERSION = "v6.2-public-district-verified"
+PUBLIC_HISTORY_CACHE_VERSION = "v6.3-hybrid-history"
 
 
 def normalize_district_name(value):
@@ -221,6 +224,47 @@ def parse_public_historical_districts(html):
             "mealsServed": to_int(cells[5]),
         })
     return rows
+
+
+
+def tracker_district_history_page(report_date):
+    """Use the latest stored live tracker snapshot for a date as a clearly-labelled fallback."""
+    if not db_enabled():
+        return None
+    meta = latest_snapshot_meta(report_date)
+    if not meta:
+        return None
+    rows = load_metrics(meta["id"], "district")
+    if not rows:
+        return None
+    state_reported = sum(to_int(r.get("dailyReported")) for r in rows)
+    state_meals = sum(to_int(r.get("mealsServed")) for r in rows)
+    if state_reported <= 0 and state_meals <= 0:
+        return None
+    return {
+        "reportDate": report_date,
+        "level": "district",
+        "rows": [{
+            "district": r.get("entityName"),
+            "districtCode": r.get("entityCode"),
+            "totalSchools": to_int(r.get("totalSchools")),
+            "monthlyReported": to_int(r.get("monthlyReported")),
+            "monthlyNotReported": to_int(r.get("monthlyNotReported")),
+            "enrolled": to_int(r.get("enrolled")),
+            "dailyReported": to_int(r.get("dailyReported")),
+            "dailyNotReported": to_int(r.get("dailyNotReported")),
+            "mealsServed": to_int(r.get("mealsServed")),
+        } for r in rows],
+        "source": "tracker-final-snapshot",
+        "dataSource": "tracker-final-snapshot",
+        "sourceUrl": None,
+        "fetchedAt": meta["capturedAt"],
+        "cacheVersion": PUBLIC_HISTORY_CACHE_VERSION,
+        "dataQualityWarning": (
+            "The public previous-date endpoint returned an all-zero state report, "
+            "so this date is showing the latest stored live tracker snapshot instead."
+        ),
+    }
 
 
 def fetch_public_district_history(report_date, refresh=False):
@@ -285,6 +329,16 @@ def fetch_public_district_history(report_date, refresh=False):
             + (f" Source message: {re.sub(r'\\s+', ' ', text)[:220]}" if text else "")
         )
 
+    # Some dates can temporarily return an all-zero public table even when the live tracker
+    # captured substantial reporting on that date. Never silently present that as "nobody reported".
+    state_reported = sum(to_int(r.get("dailyReported")) for r in rows)
+    state_meals = sum(to_int(r.get("mealsServed")) for r in rows)
+    if state_reported == 0 and state_meals == 0:
+        fallback = tracker_district_history_page(report_date)
+        if fallback:
+            save_official_cache(report_date, "district", fallback, source_url=None)
+            return fallback
+
     # Ensure district codes and names are unique before trusting the page.
     codes = [str(r.get("districtCode")) for r in rows]
     names = [normalize_district_name(r.get("district")) for r in rows]
@@ -296,9 +350,14 @@ def fetch_public_district_history(report_date, refresh=False):
         "level": "district",
         "rows": rows,
         "source": "public-official",
+        "dataSource": "public-official",
         "sourceUrl": resp.url,
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "cacheVersion": PUBLIC_HISTORY_CACHE_VERSION,
+        "dataQualityWarning": (
+            "The official public source returned an all-zero state report for this date. "
+            "No non-zero tracker snapshot was available to verify it."
+        ) if (state_reported == 0 and state_meals == 0) else None,
     }
     save_official_cache(report_date, "district", payload, source_url=resp.url)
     return payload
@@ -599,6 +658,8 @@ def load_official_cache(report_date, level, district_code=None, block_code=None,
         payload = json.loads(row[0])
     except Exception:
         return None
+    original_source = payload.get("dataSource") or payload.get("source") or "unknown"
+    payload["dataSource"] = original_source
     payload["source"] = "archive"
     payload["fetchedAt"] = row[1].isoformat()
     payload["sourceUrl"] = row[2]
@@ -1311,7 +1372,7 @@ def latest_school_gap_run():
     }
 
 
-def school_gap_run(source="manual"):
+def school_gap_run(source="manual", progress_callback=None):
     """Capture only schools that are still not reported. This is intentionally daily, not every 30 minutes."""
     if not db_enabled():
         raise RuntimeError("Tracker database is not configured.")
@@ -1319,6 +1380,8 @@ def school_gap_run(source="manual"):
         return {"skipped": True, "reason": "A school gap capture is already running."}
     started=datetime.now(timezone.utc)
     try:
+        if progress_callback:
+            progress_callback(3, "Reading today’s reporting status…")
         _, live_report_date = parse_districts_with_date()
         latest = latest_snapshot_meta(live_report_date)
         if not latest:
@@ -1335,6 +1398,12 @@ def school_gap_run(source="manual"):
                     ORDER BY district_name,block_name,cluster_name
                 """, (latest["id"],))
                 incomplete_clusters=cur.fetchall()
+
+        if progress_callback:
+            progress_callback(
+                10,
+                f"Found {len(incomplete_clusters)} incomplete clusters. Checking school status…"
+            )
 
         failures=[]
         fetch_errors=[]
@@ -1356,16 +1425,27 @@ def school_gap_run(source="manual"):
         # Low concurrency is deliberate to avoid overloading the source site.
         with ThreadPoolExecutor(max_workers=4) as ex:
             jobs=[ex.submit(fetch_cluster,row) for row in incomplete_clusters]
+            completed = 0
+            total_jobs = len(jobs)
             for fut in as_completed(jobs):
                 try:
                     failures.extend(fut.result())
                 except Exception as exc:
                     fetch_errors.append(str(exc))
                     print("School gap cluster warning:", exc, flush=True)
+                completed += 1
+                if progress_callback:
+                    pct_done = 10 + int((completed / max(1, total_jobs)) * 80)
+                    progress_callback(
+                        min(90, pct_done),
+                        f"Checked {completed} of {total_jobs} incomplete clusters…"
+                    )
 
         if fetch_errors:
             raise RuntimeError(f"School gap capture stopped because {len(fetch_errors)} cluster request(s) failed. Existing daily history was left unchanged.")
 
+        if progress_callback:
+            progress_callback(93, f"Saving {len(failures)} school gaps to the database…")
         duration=(datetime.now(timezone.utc)-started).total_seconds()
         init_db()
         with db_connect() as conn:
@@ -1393,8 +1473,11 @@ def school_gap_run(source="manual"):
                 cur.execute("DELETE FROM school_daily_failures WHERE to_date(report_date,'DD/MM/YYYY') < CURRENT_DATE - INTERVAL '35 days'")
                 cur.execute("DELETE FROM school_gap_runs WHERE to_date(report_date,'DD/MM/YYYY') < CURRENT_DATE - INTERVAL '35 days'")
             conn.commit()
-        return {"skipped":False,"runId":run_id,"capturedAt":captured_at.isoformat(),"reportDate":live_report_date,
+        result = {"skipped":False,"runId":run_id,"capturedAt":captured_at.isoformat(),"reportDate":live_report_date,
                 "incompleteClusters":len(incomplete_clusters),"gapSchools":len(failures),"durationSeconds":round(duration,2)}
+        if progress_callback:
+            progress_callback(100, "School performance capture complete.")
+        return result
     finally:
         SCHOOL_GAP_LOCK.release()
 
@@ -1430,40 +1513,121 @@ def historical_poor_performers(level="district", days=3, district_code=None, blo
                         FROM school_gap_runs
                     ) d ORDER BY report_day DESC LIMIT %s
                 """, (days,))
-                date_rows=[r[0] for r in cur.fetchall()]
+                date_rows = [r[0] for r in cur.fetchall()]
                 if not date_rows:
-                    return {"level":level,"requestedDays":days,"daysTracked":0,"dates":[],"rows":[]}
-                clauses=["report_date = ANY(%s)"]; params=[date_rows]
+                    return {
+                        "level": level, "requestedDays": days, "daysTracked": 0,
+                        "dates": [], "rows": [],
+                        "note": "School history begins after a successful daily school-gap capture."
+                    }
+
+                clauses = ["report_date = ANY(%s)"]
+                params = [date_rows]
                 if district_code:
                     clauses.append("district_code=%s"); params.append(district_code)
                 if block_code:
                     clauses.append("block_code=%s"); params.append(block_code)
-                sql=f"""
-                    SELECT school_code,COALESCE(NULLIF(MAX(school_name),''),school_code),COALESCE(NULLIF(MAX(shift_id),''),'1'),
-                           MAX(district_code),MAX(district_name),
-                           MAX(block_code),MAX(block_name),MAX(cluster_code),MAX(cluster_name),
-                           COUNT(DISTINCT report_date) AS missed_days,
-                           MAX(to_date(report_date,'DD/MM/YYYY')) AS last_gap_date
+
+                cur.execute(f"""
+                    SELECT report_date,school_code,school_name,shift_id,
+                           district_code,district_name,block_code,block_name,
+                           cluster_code,cluster_name,monthly_status,daily_status,
+                           enrolled,meals_served,captured_at
                     FROM school_daily_failures
                     WHERE {' AND '.join(clauses)}
-                    GROUP BY school_code
-                    ORDER BY missed_days DESC, last_gap_date DESC, MAX(school_name)
-                    LIMIT %s
-                """
-                params.append(limit)
-                cur.execute(sql,params); rows=cur.fetchall()
-        total_days=len(date_rows)
-        out=[]
-        for r in rows:
-            missed=int(r[9] or 0); rate=(missed/total_days*100) if total_days else 0
-            if missed==total_days and total_days>=2: label="Repeatedly not reported"
-            elif missed>=2: label="Needs follow-up"
-            else: label="One-day gap"
-            out.append({"entityCode":r[0],"entityName":r[1],"shift":r[2],"districtCode":r[3],"districtName":r[4],
-                        "blockCode":r[5],"blockName":r[6],"clusterCode":r[7],"clusterName":r[8],
-                        "missedDays":missed,"missRate":round(rate,2),"lastGapDate":r[10].strftime('%d/%m/%Y') if r[10] else None,
-                        "status":label})
-        return {"level":level,"requestedDays":days,"daysTracked":total_days,"dates":date_rows,"rows":out}
+                    ORDER BY school_code,shift_id,to_date(report_date,'DD/MM/YYYY')
+                """, params)
+                failure_rows = cur.fetchall()
+
+        # school_daily_failures contains only schools that were NOT reported.
+        # Because school_gap_runs is written only after the complete daily capture succeeds,
+        # absence from failures on another captured date means "Reported / no gap found".
+        schools = {}
+        for r in failure_rows:
+            report_date, scode, sname, shift, dc, dn, bc, bn, cc, cn, mstatus, dstatus, enrolled, meals, captured = r
+            key = (str(scode), str(shift or "1"))
+            item = schools.setdefault(key, {
+                "entityCode": str(scode),
+                "entityName": sname or str(scode),
+                "shift": str(shift or "1"),
+                "districtCode": dc, "districtName": dn,
+                "blockCode": bc, "blockName": bn,
+                "clusterCode": cc, "clusterName": cn,
+                "missed": {},
+            })
+            # Prefer the most recent non-empty identity values.
+            if sname: item["entityName"] = sname
+            if dn: item["districtName"] = dn
+            if bn: item["blockName"] = bn
+            if cn: item["clusterName"] = cn
+            item["missed"][report_date] = {
+                "monthlyStatus": mstatus,
+                "dailyStatus": dstatus or "No",
+                "enrolled": to_int(enrolled),
+                "mealsServed": to_int(meals),
+            }
+
+        total_days = len(date_rows)
+        # Display dates chronologically in the UI.
+        ordered_dates = sorted(date_rows, key=lambda x: datetime.strptime(x, "%d/%m/%Y"))
+
+        out = []
+        for item in schools.values():
+            missed_dates = set(item.pop("missed").keys())
+            missed_days = len(missed_dates)
+            reported_days = max(0, total_days - missed_days)
+            reporting_rate = (reported_days / total_days * 100) if total_days else 0
+
+            if reporting_rate < 60 and total_days >= 2:
+                label = "High attention"
+            elif missed_days >= 2 or reporting_rate < 85:
+                label = "Needs follow-up"
+            else:
+                label = "One-day gap"
+
+            daily = []
+            for ds in ordered_dates:
+                is_gap = ds in missed_dates
+                daily.append({
+                    "date": ds,
+                    "reported": not is_gap,
+                    "status": "Not reported" if is_gap else "Reported",
+                    "statusBasis": "captured gap" if is_gap else "inferred from completed daily gap capture",
+                })
+
+            out.append({
+                "entityCode": item["entityCode"],
+                "entityName": item["entityName"],
+                "shift": item["shift"],
+                "districtCode": item.get("districtCode"),
+                "districtName": item.get("districtName"),
+                "blockCode": item.get("blockCode"),
+                "blockName": item.get("blockName"),
+                "clusterCode": item.get("clusterCode"),
+                "clusterName": item.get("clusterName"),
+                "reportedDays": reported_days,
+                "missedDays": missed_days,
+                "missRate": round((missed_days / total_days * 100) if total_days else 0, 2),
+                "reportingRate": round(reporting_rate, 2),
+                "lastGapDate": max(
+                    missed_dates, key=lambda x: datetime.strptime(x, "%d/%m/%Y")
+                ) if missed_dates else None,
+                "daily": daily,
+                "status": label,
+            })
+
+        out.sort(key=lambda r: (r["reportingRate"], -r["missedDays"], r["entityName"] or ""))
+        return {
+            "level": level,
+            "requestedDays": days,
+            "daysTracked": total_days,
+            "dates": ordered_dates,
+            "rows": out[:limit],
+            "note": (
+                "School list includes schools that had at least one not-reported gap in the selected period. "
+                "A green day means the completed daily gap capture did not find that school pending."
+            ),
+        }
 
     if level not in {"district","block","cluster"}:
         raise ValueError("level must be district, block, cluster or school")
@@ -1543,7 +1707,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.2", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.3", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -1717,6 +1881,67 @@ def tracker_completion():
         return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 
 
+
+def _school_job_set(job_id, **updates):
+    with SCHOOL_JOB_LOCK:
+        state = SCHOOL_JOB_STATE.setdefault(job_id, {})
+        state.update(updates)
+        # Keep only a small recent in-memory set.
+        if len(SCHOOL_JOB_STATE) > 20:
+            finished = [k for k,v in SCHOOL_JOB_STATE.items() if v.get("status") in {"done","error"}]
+            for old_id in finished[:max(0, len(SCHOOL_JOB_STATE)-20)]:
+                SCHOOL_JOB_STATE.pop(old_id, None)
+
+
+def start_school_gap_background(source="dashboard"):
+    job_id = uuid.uuid4().hex
+    _school_job_set(
+        job_id, status="queued", progress=0,
+        message="Starting school performance capture…",
+        result=None, error=None
+    )
+
+    def runner():
+        try:
+            _school_job_set(job_id, status="running", progress=1)
+            def cb(progress, message):
+                _school_job_set(job_id, status="running", progress=int(progress), message=message)
+            result = school_gap_run(source, progress_callback=cb)
+            _school_job_set(
+                job_id, status="done", progress=100,
+                message="School performance capture complete.", result=result
+            )
+        except Exception as exc:
+            _school_job_set(
+                job_id, status="error",
+                message=f"{type(exc).__name__}: {exc}",
+                error=f"{type(exc).__name__}: {exc}"
+            )
+
+    threading.Thread(target=runner, daemon=True).start()
+    return job_id
+
+
+@app.post("/api/history/school-gaps/start")
+def school_gaps_start_route():
+    try:
+        job_id = start_school_gap_background(request.args.get("source","dashboard")[:30])
+        return jsonify({"ok":True,"data":{"jobId":job_id}})
+    except Exception as e:
+        return jsonify({"ok":False,"error":f"{type(e).__name__}: {e}"}),500
+
+
+@app.get("/api/history/school-gaps/progress")
+def school_gaps_progress_route():
+    job_id = request.args.get("jobId","")
+    with SCHOOL_JOB_LOCK:
+        state = SCHOOL_JOB_STATE.get(job_id)
+        data = dict(state) if state else None
+    if not data:
+        return jsonify({"ok":False,"error":"Progress job not found."}),404
+    return jsonify({"ok":True,"data":data})
+
+
 @app.get("/api/history/status")
 def history_status():
     try:
@@ -1823,20 +2048,24 @@ def poor_csv():
                 ])
 
         elif level == "school":
+            day_columns = [f"{d} Status" for d in data.get("dates", [])]
             w.writerow([
                 "Period", "District", "District Code", "Block", "Block Code",
                 "Cluster", "Cluster Code", "School Name", "School Code", "Shift",
-                "Days Observed", "Days Not Reported", "Not Reported Rate %",
-                "Last Not Reported Date", "Follow-up Status"
+                "Days Observed", "Days Reported", "Days Not Reported",
+                "School Reporting Rate %", "Last Not Reported Date", "Follow-up Status",
+                *day_columns
             ])
             for r in data["rows"]:
+                day_map = {x.get("date"): x.get("status") for x in r.get("daily", [])}
                 w.writerow([
                     period, r.get("districtName"), r.get("districtCode"),
                     r.get("blockName"), r.get("blockCode"),
                     r.get("clusterName"), r.get("clusterCode"),
                     r.get("entityName"), r.get("entityCode"), r.get("shift"),
-                    data.get("daysTracked"), r.get("missedDays"), r.get("missRate"),
-                    r.get("lastGapDate"), r.get("status")
+                    data.get("daysTracked"), r.get("reportedDays"), r.get("missedDays"),
+                    r.get("reportingRate"), r.get("lastGapDate"), r.get("status"),
+                    *[day_map.get(d, "—") for d in data.get("dates", [])]
                 ])
         else:
             return jsonify({"ok": False, "error": "level must be district, block, cluster or school"}), 400

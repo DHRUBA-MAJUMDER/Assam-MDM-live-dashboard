@@ -2,8 +2,8 @@ name: MDM Daily School Gap Capture
 
 on:
   schedule:
-    # 07:00 PM IST = 01:30 PM UTC. Captures end-of-day schools still not reported.
-    - cron: '30 13 * * *'
+    # 05:10 PM IST = 11:40 AM UTC. Captures same-day school gaps soon after normal reporting closes.
+    - cron: '40 11 * * *'
   workflow_dispatch:
 
 permissions:

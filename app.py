@@ -190,7 +190,10 @@ def parse_schools(district_code, block_code, cluster_code):
 
 PUBLIC_STATE_REPORT_URL = "https://mdmhp.nic.in/Home/StateWiseSummary/AS"
 PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
-PUBLIC_HISTORY_CACHE_VERSION = "v6.3-hybrid-history"
+PUBLIC_BLOCK_HISTORY_URL = "https://mdmhp.nic.in/Home/BlockWiseSummary"
+PUBLIC_CLUSTER_HISTORY_URL = "https://mdmhp.nic.in/Home/ClusterWiseSummary"
+PUBLIC_SCHOOL_HISTORY_URL = "https://mdmhp.nic.in/Home/SchoolWiseSummary"
+PUBLIC_HISTORY_CACHE_VERSION = "v6.6-public-hierarchy"
 
 
 def normalize_district_name(value):
@@ -697,6 +700,121 @@ def save_official_cache(report_date, level, payload, district_code=None, block_c
         conn.commit()
 
 
+
+def _public_history_session():
+    """Open the public historical page and return a Session + fresh anti-forgery token."""
+    s = requests.Session()
+    s.headers.update(HEADERS)
+
+    landing = s.get(PUBLIC_STATE_REPORT_URL, timeout=40)
+    landing.raise_for_status()
+
+    soup = BeautifulSoup(landing.text, "html.parser")
+    token = soup.find("input", attrs={"name": "__RequestVerificationToken"})
+    if not token or not token.get("value"):
+        raise RuntimeError("Public historical page token was not found.")
+
+    return s, token.get("value")
+
+
+def _clone_public_history_session(base_session):
+    """Clone public anti-forgery cookie/session for parallel hierarchy POSTs."""
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    s.cookies.update(base_session.cookies)
+    return s
+
+
+def _public_history_target(level):
+    if level == "block":
+        return PUBLIC_BLOCK_HISTORY_URL
+    if level == "cluster":
+        return PUBLIC_CLUSTER_HISTORY_URL
+    if level == "school":
+        return PUBLIC_SCHOOL_HISTORY_URL
+    raise ValueError("Public hierarchy level must be block, cluster or school")
+
+
+def fetch_public_hierarchy_page(
+    report_date, level, district_code=None, block_code=None, cluster_code=None,
+    session=None, token=None, use_cache=True
+):
+    """Fetch previous-date Block / Cluster / School from public /Home POST endpoints."""
+    report_date = validate_report_date(report_date)
+    if level not in {"block", "cluster", "school"}:
+        raise ValueError("level must be block, cluster or school")
+
+    if level in {"block", "cluster", "school"} and not district_code:
+        raise ValueError("districtCode is required")
+    if level in {"cluster", "school"} and not block_code:
+        raise ValueError("blockCode is required")
+    if level == "school" and not cluster_code:
+        raise ValueError("clusterCode is required")
+
+    if use_cache:
+        cached = load_official_cache(
+            report_date, level, district_code, block_code, cluster_code
+        )
+        if cached and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION:
+            return cached
+
+    own_session = False
+    if session is None or token is None:
+        session, token = _public_history_session()
+        own_session = True
+
+    payload = {
+        "stateCode": STATE_CODE,
+        "districtCode": str(district_code),
+        "mealServedDate": report_date,
+        "__RequestVerificationToken": token,
+    }
+    if level in {"cluster", "school"}:
+        payload["blockCode"] = str(block_code)
+    if level == "school":
+        payload["clusterCode"] = str(cluster_code)
+
+    url = _public_history_target(level)
+    resp = session.post(
+        url,
+        data=payload,
+        headers={
+            **HEADERS,
+            "Referer": PUBLIC_STATE_REPORT_URL,
+            "X-Requested-With": "XMLHttpRequest",
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+
+    rows = parse_official_summary_html(
+        resp.text, level, district_code, block_code, cluster_code
+    )
+    if not rows:
+        text = BeautifulSoup(resp.text, "html.parser").get_text(" ", strip=True)
+        short = re.sub(r"\s+", " ", text)[:260]
+        raise RuntimeError(
+            f"Public historical {level} response returned no report rows for {report_date}."
+            + (f" Source message: {short}" if short else "")
+        )
+
+    page = {
+        "reportDate": report_date,
+        "level": level,
+        "rows": rows,
+        "source": "public-official-hierarchy",
+        "dataSource": "public-official-hierarchy",
+        "sourceUrl": resp.url,
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "cacheVersion": PUBLIC_HISTORY_CACHE_VERSION,
+    }
+    save_official_cache(
+        report_date, level, page,
+        district_code, block_code, cluster_code, resp.url
+    )
+    return page
+
+
 def _history_session(report_date):
     """Create the same selected-date Reports session the browser creates:
     GET /Reports/MDM -> fresh anti-forgery token
@@ -907,7 +1025,6 @@ def fetch_official_history_page(
 def get_official_history_page(report_date, level, district_code=None, block_code=None, cluster_code=None, refresh=False):
     report_date = validate_report_date(report_date)
 
-    # District remains on the public date-wise endpoint because it is fast and independent.
     if level == "district":
         if refresh and db_enabled():
             scope_key = history_scope_key("district")
@@ -920,6 +1037,9 @@ def get_official_history_page(report_date, level, district_code=None, block_code
                     )
                 conn.commit()
         return fetch_public_district_history(report_date, refresh=refresh)
+
+    if level not in {"block", "cluster", "school"}:
+        raise ValueError("level must be district, block, cluster or school")
 
     if refresh and db_enabled():
         scope_key = history_scope_key(level, district_code, block_code, cluster_code)
@@ -935,13 +1055,15 @@ def get_official_history_page(report_date, level, district_code=None, block_code
     cached = load_official_cache(
         report_date, level, district_code, block_code, cluster_code
     )
-    if cached and not refresh:
+    if cached and not refresh and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION:
         return cached
 
-    # V6.5: reproduce the portal's selected-date session first, then read the hierarchy.
-    return fetch_official_history_page(
-        report_date, level, district_code, block_code, cluster_code,
-        session=None, use_cache=not refresh
+    return fetch_public_hierarchy_page(
+        report_date, level,
+        district_code=district_code,
+        block_code=block_code,
+        cluster_code=cluster_code,
+        use_cache=not refresh
     )
 
 def official_history_trend(report_dates, level, entity_code, district_code=None, block_code=None, cluster_code=None, entity_name=None, refresh=False):
@@ -1761,7 +1883,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.5", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.6", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -2135,14 +2257,14 @@ def _export_progress(cb, progress, message, **extra):
         cb(max(0, min(100, int(progress))), message, **extra)
 
 
-def _fetch_history_task(base_session, report_date, level, dc=None, bc=None, cc=None):
+def _fetch_history_task(base_session, token, report_date, level, dc=None, bc=None, cc=None):
     cached = load_official_cache(report_date, level, dc, bc, cc)
-    if cached:
+    if cached and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION:
         return cached
-    s = _clone_history_session(base_session)
-    return fetch_official_history_page(
+    s = _clone_public_history_session(base_session)
+    return fetch_public_hierarchy_page(
         report_date, level, dc, bc, cc,
-        session=s, use_cache=False
+        session=s, token=token, use_cache=False
     )
 
 
@@ -2164,8 +2286,8 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
     if status not in {"reported","not_reported"}:
         raise ValueError("status must be reported or not_reported")
 
-    _export_progress(progress_callback, 2, "Selecting the previous report date on the official portal…")
-    base_session = _history_session(report_date)
+    _export_progress(progress_callback, 2, "Opening the public historical report page…")
+    base_session, public_token = _public_history_session()
 
     _export_progress(progress_callback, 5, "Loading district report…")
     district_page = fetch_public_district_history(report_date)
@@ -2192,7 +2314,7 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
 
     def fetch_blocks(d):
         page = _fetch_history_task(
-            base_session, report_date, "block",
+            base_session, public_token, report_date, "block",
             dc=str(d.get("districtCode"))
         )
         out = []
@@ -2236,7 +2358,7 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
 
     def fetch_clusters_for_block(b):
         page = _fetch_history_task(
-            base_session, report_date, "cluster",
+            base_session, public_token, report_date, "cluster",
             dc=str(b.get("districtCode")), bc=str(b.get("blockCode"))
         )
         out = []
@@ -2284,7 +2406,7 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
 
     def fetch_schools_for_cluster(c):
         page = _fetch_history_task(
-            base_session, report_date, "school",
+            base_session, public_token, report_date, "school",
             dc=str(c.get("districtCode")),
             bc=str(c.get("blockCode")),
             cc=str(c.get("clusterCode"))
@@ -2348,9 +2470,9 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
         },
         "sources": {
             "district": district_page.get("dataSource") or district_page.get("source"),
-            "block": "official-selected-date-session",
-            "cluster": "official-selected-date-session",
-            "school": "official-selected-date-session",
+            "block": "public-official-hierarchy",
+            "cluster": "public-official-hierarchy",
+            "school": "public-official-hierarchy",
         },
         "warnings": warnings,
         "errors": errors,

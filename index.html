@@ -233,7 +233,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
   </div>
   <div class="pbody">
    <div class="simple-note" id="prevAvailability">Previous district reports are checked against stored tracker data. If the public source returns an all-zero date but the tracker captured real reporting, the dashboard uses the clearly-labelled Tracker Final Snapshot instead.</div>
-   <div class="simple-note" style="margin-top:9px"><b>V6.5:</b> selected date is now applied using the same /Reports/MDM/Submit session flow as the official portal. Previous District → Block → Cluster → School drill-down and Excel use that selected-date session.</div>
+   <div class="simple-note" style="margin-top:9px"><b>V6.6:</b> Previous District → Block → Cluster → School now uses the public /Home historical POST endpoints with the selected date and fresh verification token. No /Reports login/session route is used.</div>
    <div class="prev-export-box">
     <div>
      <b>Download Selected Date as Excel</b>
@@ -526,7 +526,7 @@ async function startPreviousExcel(status){
  $('#prevNotReportedExcel').disabled=true;
  try{
   setPrevExcelProgress(true,1,'Starting selected-date historical crawl…');
-  notice('Building the Excel from the selected historical date. District → Block → Cluster → School will be checked; this can take several minutes for a large Not Reported list.','info');
+  notice('Building the Excel from the selected historical date using the public /Home hierarchy. District → Block → Cluster → School will be checked; this can take several minutes for a large Not Reported list.','info');
   const start=await silentJson(`/api/report/previous/start?date=${encodeURIComponent(date)}&status=${encodeURIComponent(status)}`,{method:'POST'});
   const done=await pollPreviousExport(start.data.jobId);
   setPrevExcelProgress(true,100,'Excel ready — download starting…');

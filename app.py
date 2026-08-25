@@ -21,6 +21,7 @@ except Exception:
 app = Flask(__name__)
 BASE = "https://mdmhp.nic.in/Home"
 STATE_CODE = "18"
+BROWSER_SYNC_KEY = os.environ.get("BROWSER_SYNC_KEY", "").strip()
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138 Safari/537.36",
@@ -193,7 +194,7 @@ PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
 PUBLIC_BLOCK_HISTORY_URL = "https://mdmhp.nic.in/Home/BlockWiseSummary"
 PUBLIC_CLUSTER_HISTORY_URL = "https://mdmhp.nic.in/Home/ClusterWiseSummary"
 PUBLIC_SCHOOL_HISTORY_URL = "https://mdmhp.nic.in/Home/SchoolWiseSummary"
-PUBLIC_HISTORY_CACHE_VERSION = "v6.6.1-school-parser"
+PUBLIC_HISTORY_CACHE_VERSION = "v6.7-browser-sync"
 
 
 def normalize_district_name(value):
@@ -1115,45 +1116,42 @@ def get_official_history_page(report_date, level, district_code=None, block_code
     report_date = validate_report_date(report_date)
 
     if level == "district":
-        if refresh and db_enabled():
-            scope_key = history_scope_key("district")
-            with db_connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM official_history_cache "
-                        "WHERE report_date=%s AND level='district' AND scope_key=%s",
-                        (report_date, scope_key)
-                    )
-                conn.commit()
+        cached = load_official_cache(report_date, "district")
+        if cached and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION and not refresh:
+            return cached
         return fetch_public_district_history(report_date, refresh=refresh)
 
     if level not in {"block", "cluster", "school"}:
         raise ValueError("level must be district, block, cluster or school")
 
-    if refresh and db_enabled():
-        scope_key = history_scope_key(level, district_code, block_code, cluster_code)
-        with db_connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "DELETE FROM official_history_cache "
-                    "WHERE report_date=%s AND level=%s AND scope_key=%s",
-                    (report_date, level, scope_key)
-                )
-            conn.commit()
-
     cached = load_official_cache(
         report_date, level, district_code, block_code, cluster_code
     )
-    if cached and not refresh and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION:
+    if cached and cached.get("cacheVersion") == PUBLIC_HISTORY_CACHE_VERSION and not refresh:
         return cached
 
-    return fetch_public_hierarchy_page(
-        report_date, level,
-        district_code=district_code,
-        block_code=block_code,
-        cluster_code=cluster_code,
-        use_cache=not refresh
-    )
+    # Block / cluster often remain reachable server-side, so keep a fallback.
+    # Historical school pages require the user's authenticated browser session
+    # and are intentionally never fetched with copied cookies on Render.
+    if level == "school":
+        raise RuntimeError(
+            "Historical school page is not synced yet. "
+            "Run the Assam MDM Browser Sync extension for this date/cluster."
+        )
+
+    try:
+        return fetch_public_hierarchy_page(
+            report_date, level,
+            district_code=district_code,
+            block_code=block_code,
+            cluster_code=cluster_code,
+            use_cache=not refresh
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Historical {level} page is not available from Render and is not synced. "
+            f"Run Browser Sync for this date. Source error: {exc}"
+        )
 
 def official_history_trend(report_dates, level, entity_code, district_code=None, block_code=None, cluster_code=None, entity_name=None, refresh=False):
     if level == "district":
@@ -1972,7 +1970,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.6.1", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.7", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")
@@ -2016,6 +2014,161 @@ def schools():
     except Exception as e:
         return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 
+
+
+
+def _browser_sync_authorized():
+    if not BROWSER_SYNC_KEY:
+        return False, "BROWSER_SYNC_KEY is not configured on the server."
+    supplied = request.headers.get("X-Sync-Key", "")
+    if not supplied or supplied != BROWSER_SYNC_KEY:
+        return False, "Invalid browser sync key."
+    return True, None
+
+
+def _validate_browser_sync_page(body):
+    if not isinstance(body, dict):
+        raise ValueError("JSON object is required.")
+    report_date = validate_report_date(body.get("reportDate"))
+    level = str(body.get("level") or "").strip().lower()
+    if level not in {"district", "block", "cluster", "school"}:
+        raise ValueError("level must be district, block, cluster or school")
+    rows = body.get("rows")
+    if not isinstance(rows, list):
+        raise ValueError("rows must be an array")
+
+    district_code = str(body.get("districtCode") or "").strip() or None
+    block_code = str(body.get("blockCode") or "").strip() or None
+    cluster_code = str(body.get("clusterCode") or "").strip() or None
+
+    if level in {"block", "cluster", "school"} and not district_code:
+        raise ValueError("districtCode is required")
+    if level in {"cluster", "school"} and not block_code:
+        raise ValueError("blockCode is required")
+    if level == "school" and not cluster_code:
+        raise ValueError("clusterCode is required")
+
+    # Keep only reporting fields; never accept browser cookies, auth headers,
+    # phone numbers or respondent/contact fields.
+    clean = []
+    if level in {"district", "block", "cluster"}:
+        label_key = level
+        code_key = f"{level}Code"
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get(label_key) or "").strip()
+            code = str(raw.get(code_key) or "").strip()
+            if not name:
+                continue
+            clean.append({
+                label_key: name,
+                code_key: code,
+                "totalSchools": to_int(raw.get("totalSchools")),
+                "monthlyReported": to_int(raw.get("monthlyReported")),
+                "monthlyNotReported": to_int(raw.get("monthlyNotReported")),
+                "enrolled": to_int(raw.get("enrolled")),
+                "dailyReported": to_int(raw.get("dailyReported")),
+                "dailyNotReported": to_int(raw.get("dailyNotReported")),
+                "mealsServed": to_int(raw.get("mealsServed")),
+            })
+    else:
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            school = str(raw.get("school") or "").strip()
+            if not school:
+                continue
+            clean.append({
+                "school": school,
+                "schoolCode": str(raw.get("schoolCode") or "").strip(),
+                "shift": str(raw.get("shift") or "1").strip() or "1",
+                "monthlyStatus": str(raw.get("monthlyStatus") or "").strip(),
+                "enrolled": to_int(raw.get("enrolled")),
+                "dailyStatus": str(raw.get("dailyStatus") or "").strip(),
+                "mealsServed": to_int(raw.get("mealsServed")),
+            })
+        if clean:
+            clean = _enrich_historical_school_codes(
+                clean, district_code, block_code, cluster_code
+            )
+
+    return report_date, level, district_code, block_code, cluster_code, clean
+
+
+@app.post("/api/browser-sync/page")
+def browser_sync_page():
+    ok, err = _browser_sync_authorized()
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 401
+    try:
+        body = request.get_json(silent=True) or {}
+        report_date, level, dc, bc, cc, rows = _validate_browser_sync_page(body)
+        if not rows:
+            return jsonify({"ok": False, "error": "No valid reporting rows were supplied."}), 400
+
+        payload = {
+            "reportDate": report_date,
+            "level": level,
+            "rows": rows,
+            "source": "browser-authenticated-sync",
+            "dataSource": "browser-authenticated-sync",
+            "sourceUrl": str(body.get("sourceUrl") or "browser://mdmhp.nic.in"),
+            "fetchedAt": datetime.now(timezone.utc).isoformat(),
+            "cacheVersion": PUBLIC_HISTORY_CACHE_VERSION,
+        }
+        save_official_cache(
+            report_date, level, payload, dc, bc, cc,
+            source_url=payload["sourceUrl"]
+        )
+        return jsonify({
+            "ok": True,
+            "data": {
+                "reportDate": report_date,
+                "level": level,
+                "rows": len(rows),
+                "scopeKey": history_scope_key(level, dc, bc, cc),
+            }
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 400
+
+
+@app.get("/api/browser-sync/status")
+def browser_sync_status():
+    try:
+        report_date = validate_report_date(request.args.get("date"))
+        if not db_enabled():
+            return jsonify({"ok": True, "data": {
+                "reportDate": report_date, "district": 0, "block": 0,
+                "cluster": 0, "school": 0
+            }})
+        init_db()
+        counts = {"district": 0, "block": 0, "cluster": 0, "school": 0}
+        rows_count = {"district": 0, "block": 0, "cluster": 0, "school": 0}
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT level,payload_json
+                    FROM official_history_cache
+                    WHERE report_date=%s
+                """, (report_date,))
+                for level, payload_json in cur.fetchall():
+                    if level not in counts:
+                        continue
+                    counts[level] += 1
+                    try:
+                        payload = json.loads(payload_json)
+                        rows_count[level] += len(payload.get("rows") or [])
+                    except Exception:
+                        pass
+        return jsonify({"ok": True, "data": {
+            "reportDate": report_date,
+            "pages": counts,
+            "rows": rows_count,
+        }})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 400
 
 
 @app.get("/api/official/history/status")
@@ -2358,78 +2511,41 @@ def _fetch_history_task(base_session, token, report_date, level, dc=None, bc=Non
 
 
 def _build_previous_export_data(report_date, status, progress_callback=None):
-    """Build exact selected-date hierarchy.
-
-    Aggregate status:
-      Reported    -> dailyReported > 0
-      Not Reported-> dailyNotReported > 0
-
-    School status:
-      Reported    -> Daily Status Yes
-      Not Reported-> Daily Status No
-
-    Only relevant branches are expanded, so Reported downloads don't crawl
-    districts/blocks/clusters that had no reported schools at all.
-    """
+    """Build previous-report Excel from archived browser-sync hierarchy."""
     report_date = validate_report_date(report_date)
-    if status not in {"reported","not_reported"}:
+    if status not in {"reported", "not_reported"}:
         raise ValueError("status must be reported or not_reported")
 
-    _export_progress(progress_callback, 2, "Opening the public historical report page…")
-    base_session, public_token = _public_history_session()
-
-    _export_progress(progress_callback, 5, "Loading district report…")
-    district_page = fetch_public_district_history(report_date)
+    _export_progress(progress_callback, 5, "Loading district summary…")
+    district_page = get_official_history_page(report_date, "district")
     districts_all = district_page.get("rows", [])
     districts = [r for r in districts_all if _previous_status_matches("district", r, status)]
 
-    block_rows = []
-    cluster_rows = []
-    school_rows = []
-    warnings = []
+    block_rows, cluster_rows, school_rows = [], [], []
     errors = []
 
-    # ---- BLOCKS ----
     target_districts = [
         r for r in districts_all
         if (to_int(r.get("dailyReported")) > 0 if status == "reported"
             else to_int(r.get("dailyNotReported")) > 0)
     ]
-    _export_progress(
-        progress_callback, 8,
-        f"Loading blocks for {len(target_districts)} relevant districts…",
-        districts=len(target_districts)
-    )
 
-    def fetch_blocks(d):
-        page = _fetch_history_task(
-            base_session, public_token, report_date, "block",
-            dc=str(d.get("districtCode"))
-        )
-        out = []
+    for i, d in enumerate(target_districts, start=1):
+        dc = str(d.get("districtCode") or "")
+        page = load_official_cache(report_date, "block", district_code=dc)
+        if not page or page.get("cacheVersion") != PUBLIC_HISTORY_CACHE_VERSION:
+            errors.append(f"Blocks not synced: {d.get('district')} ({dc})")
+            continue
         for b in page.get("rows", []):
             b = dict(b)
             b["districtName"] = d.get("district")
-            b["districtCode"] = d.get("districtCode")
-            out.append(b)
-        return out
-
-    completed = 0
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        jobs = {ex.submit(fetch_blocks, d): d for d in target_districts}
-        for fut in as_completed(jobs):
-            d = jobs[fut]
-            try:
-                block_rows.extend(fut.result())
-            except Exception as exc:
-                errors.append(f"Blocks / {d.get('district')}: {exc}")
-            completed += 1
-            pct = 8 + int((completed / max(1, len(jobs))) * 17)
-            _export_progress(
-                progress_callback, pct,
-                f"Blocks: {completed} of {len(jobs)} districts checked…",
-                completed=completed, total=len(jobs), stage="blocks"
-            )
+            b["districtCode"] = dc
+            block_rows.append(b)
+        _export_progress(
+            progress_callback,
+            10 + int(i / max(1, len(target_districts)) * 18),
+            f"Reading cached blocks: {i}/{len(target_districts)} districts…"
+        )
 
     blocks_for_sheet = [r for r in block_rows if _previous_status_matches("block", r, status)]
     target_blocks = [
@@ -2438,46 +2554,27 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
             else to_int(r.get("dailyNotReported")) > 0)
     ]
 
-    # ---- CLUSTERS ----
-    _export_progress(
-        progress_callback, 27,
-        f"Loading clusters for {len(target_blocks)} relevant blocks…",
-        blocks=len(target_blocks)
-    )
-
-    def fetch_clusters_for_block(b):
-        page = _fetch_history_task(
-            base_session, public_token, report_date, "cluster",
-            dc=str(b.get("districtCode")), bc=str(b.get("blockCode"))
-        )
-        out = []
+    for i, b in enumerate(target_blocks, start=1):
+        dc = str(b.get("districtCode") or "")
+        bc = str(b.get("blockCode") or "")
+        page = load_official_cache(report_date, "cluster", district_code=dc, block_code=bc)
+        if not page or page.get("cacheVersion") != PUBLIC_HISTORY_CACHE_VERSION:
+            errors.append(
+                f"Clusters not synced: {b.get('districtName')} / {b.get('block')} ({bc})"
+            )
+            continue
         for c in page.get("rows", []):
             c = dict(c)
             c["districtName"] = b.get("districtName")
-            c["districtCode"] = b.get("districtCode")
+            c["districtCode"] = dc
             c["blockName"] = b.get("block")
-            c["blockCode"] = b.get("blockCode")
-            out.append(c)
-        return out
-
-    completed = 0
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        jobs = {ex.submit(fetch_clusters_for_block, b): b for b in target_blocks}
-        for fut in as_completed(jobs):
-            b = jobs[fut]
-            try:
-                cluster_rows.extend(fut.result())
-            except Exception as exc:
-                errors.append(
-                    f"Clusters / {b.get('districtName')} / {b.get('block')}: {exc}"
-                )
-            completed += 1
-            pct = 27 + int((completed / max(1, len(jobs))) * 28)
-            _export_progress(
-                progress_callback, pct,
-                f"Clusters: {completed} of {len(jobs)} blocks checked…",
-                completed=completed, total=len(jobs), stage="clusters"
-            )
+            c["blockCode"] = bc
+            cluster_rows.append(c)
+        _export_progress(
+            progress_callback,
+            30 + int(i / max(1, len(target_blocks)) * 25),
+            f"Reading cached clusters: {i}/{len(target_blocks)} blocks…"
+        )
 
     clusters_for_sheet = [r for r in cluster_rows if _previous_status_matches("cluster", r, status)]
     target_clusters = [
@@ -2486,66 +2583,49 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
             else to_int(r.get("dailyNotReported")) > 0)
     ]
 
-    # ---- SCHOOLS ----
-    _export_progress(
-        progress_callback, 57,
-        f"Loading school status for {len(target_clusters)} relevant clusters…",
-        clusters=len(target_clusters)
-    )
-
-    def fetch_schools_for_cluster(c):
-        page = _fetch_history_task(
-            base_session, public_token, report_date, "school",
-            dc=str(c.get("districtCode")),
-            bc=str(c.get("blockCode")),
-            cc=str(c.get("clusterCode"))
+    for i, c in enumerate(target_clusters, start=1):
+        dc = str(c.get("districtCode") or "")
+        bc = str(c.get("blockCode") or "")
+        cc = str(c.get("clusterCode") or "")
+        page = load_official_cache(
+            report_date, "school",
+            district_code=dc, block_code=bc, cluster_code=cc
         )
-        out = []
+        if not page or page.get("cacheVersion") != PUBLIC_HISTORY_CACHE_VERSION:
+            errors.append(
+                f"Schools not synced: {c.get('districtName')} / "
+                f"{c.get('blockName')} / {c.get('cluster')} ({cc})"
+            )
+            continue
         for s in page.get("rows", []):
             s = dict(s)
             s["districtName"] = c.get("districtName")
-            s["districtCode"] = c.get("districtCode")
+            s["districtCode"] = dc
             s["blockName"] = c.get("blockName")
-            s["blockCode"] = c.get("blockCode")
+            s["blockCode"] = bc
             s["clusterName"] = c.get("cluster")
-            s["clusterCode"] = c.get("clusterCode")
-            out.append(s)
-        return out
-
-    completed = 0
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        jobs = {ex.submit(fetch_schools_for_cluster, c): c for c in target_clusters}
-        for fut in as_completed(jobs):
-            c = jobs[fut]
-            try:
-                school_rows.extend(fut.result())
-            except Exception as exc:
-                errors.append(
-                    f"Schools / {c.get('districtName')} / {c.get('blockName')} / "
-                    f"{c.get('cluster')}: {exc}"
-                )
-            completed += 1
-            pct = 57 + int((completed / max(1, len(jobs))) * 36)
-            _export_progress(
-                progress_callback, pct,
-                f"Schools: {completed} of {len(jobs)} clusters checked…",
-                completed=completed, total=len(jobs), stage="schools"
-            )
+            s["clusterCode"] = cc
+            school_rows.append(s)
+        _export_progress(
+            progress_callback,
+            58 + int(i / max(1, len(target_clusters)) * 34),
+            f"Reading cached schools: {i}/{len(target_clusters)} clusters…"
+        )
 
     schools_for_sheet = [
         r for r in school_rows if _previous_status_matches("school", r, status)
     ]
 
+    warnings = []
     if errors:
         warnings.append(
-            f"{len(errors)} hierarchy page(s) could not be loaded. "
-            "See the Errors sheet in the workbook."
+            f"{len(errors)} hierarchy page(s) are not synced for {report_date}. "
+            "Run Browser Sync again to complete the archive."
         )
 
     _export_progress(
-        progress_callback, 94,
-        f"Preparing workbook: {len(schools_for_sheet):,} matching schools…",
-        schools=len(schools_for_sheet)
+        progress_callback, 95,
+        f"Preparing workbook: {len(schools_for_sheet):,} matching schools…"
     )
 
     return {
@@ -2559,9 +2639,9 @@ def _build_previous_export_data(report_date, status, progress_callback=None):
         },
         "sources": {
             "district": district_page.get("dataSource") or district_page.get("source"),
-            "block": "public-official-hierarchy",
-            "cluster": "public-official-hierarchy",
-            "school": "public-official-hierarchy",
+            "block": "browser-authenticated-sync",
+            "cluster": "browser-authenticated-sync",
+            "school": "browser-authenticated-sync",
         },
         "warnings": warnings,
         "errors": errors,

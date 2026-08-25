@@ -233,7 +233,7 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
   </div>
   <div class="pbody">
    <div class="simple-note" id="prevAvailability">Previous district reports are checked against stored tracker data. If the public source returns an all-zero date but the tracker captured real reporting, the dashboard uses the clearly-labelled Tracker Final Snapshot instead.</div>
-   <div class="simple-note" style="margin-top:9px"><b>V6.6.1:</b> School-wise historical rows now support the official 6-column layout where Shift ID is embedded in the School name. School Code is matched from the current public school list when available.</div>
+   <div class="simple-note" style="margin-top:9px"><b>V6.7:</b> Historical School data is archived by the Chrome Browser Sync extension using your already logged-in PM POSHAN tab. Passwords and session cookies are never uploaded to Render; only reporting rows are synced.</div><div id="browserSyncStatus" class="simple-note" style="margin-top:8px">Browser Sync status: select a date and click Load Report.</div>
    <div class="prev-export-box">
     <div>
      <b>Download Selected Date as Excel</b>
@@ -466,9 +466,25 @@ async function initPrevious(force=false){
   if(force||!$('#prevBody').children.length)await prevLoadDistricts();
  }catch(e){notice(e.message)}
 }
+
+async function refreshBrowserSyncStatus(){
+ const date=uiDateToReport($('#prevDate').value);
+ if(!date)return;
+ try{
+  const j=await silentJson('/api/browser-sync/status?date='+encodeURIComponent(date));
+  const d=j.data||{},p=d.pages||{},r=d.rows||{};
+  const el=$('#browserSyncStatus');
+  if(el)el.innerHTML=`<b>Browser Sync:</b> ${date} · pages: Block ${p.block||0}, Cluster ${p.cluster||0}, School ${p.school||0} · school rows archived: ${(r.school||0).toLocaleString()}`;
+ }catch(e){
+  const el=$('#browserSyncStatus'); if(el)el.textContent='Browser Sync status unavailable.';
+ }
+}
+
 async function prevLoadDistricts(){
  prevCtx={level:'district',districtCode:null,districtName:null,blockCode:null,blockName:null,clusterCode:null,clusterName:null,trendLevel:null,trendCode:null,trendName:null};
  prevTrendTarget(null,null,null);const data=await prevPage('district');prevRenderSummary(data);
+
+ await refreshBrowserSyncStatus();
 }
 async function prevLoadBlocks(code,name){
  prevCtx.level='block';prevCtx.districtCode=code;prevCtx.districtName=name;prevCtx.blockCode=null;prevCtx.blockName=null;prevCtx.clusterCode=null;prevCtx.clusterName=null;

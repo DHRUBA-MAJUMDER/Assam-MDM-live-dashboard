@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Assam MDM Historical Sync",
+  "version": "1.0.0",
+  "description": "Archives PM POSHAN historical reporting hierarchy to your Assam MDM dashboard without uploading login cookies.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://mdmhp.nic.in/*",
+    "https://assam-mdm-dashboard.onrender.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Assam MDM Historical Sync"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mdmhp.nic.in/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

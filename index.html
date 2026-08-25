@@ -233,16 +233,20 @@ main{min-width:0;padding:26px}.top{display:flex;justify-content:space-between;al
   </div>
   <div class="pbody">
    <div class="simple-note" id="prevAvailability">Previous district reports are checked against stored tracker data. If the public source returns an all-zero date but the tracker captured real reporting, the dashboard uses the clearly-labelled Tracker Final Snapshot instead.</div>
-   <div class="simple-note" style="margin-top:9px"><b>Excel rule:</b> District / Block / Cluster “Reported” means at least 1 school reported; “Not Reported” means at least 1 school is still pending. A partially reporting area can appear in both files. School uses Daily Status Yes/No.</div>
+   <div class="simple-note" style="margin-top:9px"><b>V6.5:</b> selected date is now applied using the same /Reports/MDM/Submit session flow as the official portal. Previous District → Block → Cluster → School drill-down and Excel use that selected-date session.</div>
    <div class="prev-export-box">
     <div>
      <b>Download Selected Date as Excel</b>
-     <div class="small-help">Each workbook contains Summary, Districts, Blocks, Clusters and Schools sheets. Partial-reporting areas can appear in both Excel files.</div>
+     <div class="small-help">Each workbook contains Summary, Districts, Blocks, Clusters and Schools sheets from the selected historical date. Partial-reporting areas can appear in both files.</div>
     </div>
     <div class="prev-export-buttons">
      <button id="prevReportedExcel" class="btn excel-good">Reported Excel</button>
      <button id="prevNotReportedExcel" class="btn excel-bad">Not Reported Excel</button>
     </div>
+   </div>
+   <div id="prevExcelProgress" class="capture-progress">
+    <div class="capture-track"><i id="prevExcelBar"></i></div>
+    <div class="capture-meta"><span id="prevExcelText">Preparing…</span><b id="prevExcelPct">0%</b></div>
    </div>
   </div>
  </section>
@@ -478,26 +482,63 @@ async function prevLoadSchools(code,name){
  prevCtx.level='school';prevCtx.clusterCode=code;prevCtx.clusterName=name;
  prevTrendTarget('cluster',code,name);const data=await prevPage('school',{districtCode:prevCtx.districtCode,blockCode:prevCtx.blockCode,clusterCode:code});prevRenderSummary(data);
 }
-$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{if(a.dataset.level==='district'){prevCtx.districtCode=a.dataset.code;prevCtx.districtName=a.dataset.name;prevTrendTarget('district',a.dataset.code,a.dataset.name);$('#prevTrendSummary').innerHTML='<div class="empty">District changed. Click “Load Trend” to load verified active reporting days.</div>';$('#prevTrendBody').innerHTML='<tr><td colspan="7" class="empty">No trend loaded for this district yet.</td></tr>';notice(`${a.dataset.name} selected. Load Trend will skip state-wide zero-reporting days and validate the district name/code before analysis.`,'info');}}catch(err){notice(err.message)}});
-$('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{await prevLoadDistricts()}catch(err){notice(err.message)}});
+$('#prevBody').addEventListener('click',async e=>{const a=e.target.closest('.prev-row');if(!a)return;try{
+ if(a.dataset.level==='district'){
+  prevCtx.districtCode=a.dataset.code;prevCtx.districtName=a.dataset.name;
+  prevTrendTarget('district',a.dataset.code,a.dataset.name);
+  await prevLoadBlocks(a.dataset.code,a.dataset.name);
+ }else if(a.dataset.level==='block'){
+  await prevLoadClusters(a.dataset.code,a.dataset.name);
+ }else if(a.dataset.level==='cluster'){
+  await prevLoadSchools(a.dataset.code,a.dataset.name);
+ }
+}catch(err){notice(err.message)}});
+$('#prevBreadcrumb').addEventListener('click',async e=>{const b=e.target.closest('.prev-crumb');if(!b)return;try{
+ const l=b.dataset.prevLevel;
+ if(l==='district')await prevLoadDistricts();
+ else if(l==='block')await prevLoadBlocks(prevCtx.districtCode,prevCtx.districtName);
+ else if(l==='cluster')await prevLoadClusters(prevCtx.blockCode,prevCtx.blockName);
+ else if(l==='school')await prevLoadSchools(prevCtx.clusterCode,prevCtx.clusterName);
+}catch(err){notice(err.message)}});
 
-function previousExcelUrl(status){
+function setPrevExcelProgress(show,pct=0,text=''){
+ const wrap=$('#prevExcelProgress'),bar=$('#prevExcelBar');
+ wrap.classList.toggle('show',show);
+ bar.style.width=Math.max(0,Math.min(100,pct))+'%';
+ $('#prevExcelPct').textContent=Math.round(pct)+'%';
+ if(text)$('#prevExcelText').textContent=text;
+}
+async function pollPreviousExport(jobId){
+ for(let i=0;i<2400;i++){
+  const j=await silentJson('/api/report/previous/progress?jobId='+encodeURIComponent(jobId));
+  const s=j.data||{};
+  setPrevExcelProgress(true,Number(s.progress||0),s.message||'Working…');
+  if(s.status==='done')return s;
+  if(s.status==='error')throw new Error(s.error||s.message||'Excel generation failed.');
+  await new Promise(r=>setTimeout(r,1200));
+ }
+ throw new Error('Excel generation is taking longer than expected.');
+}
+async function startPreviousExcel(status){
  const date=uiDateToReport($('#prevDate').value);
  if(!date)throw new Error('Select a previous report date first.');
- return `/api/report/previous.xlsx?date=${encodeURIComponent(date)}&status=${encodeURIComponent(status)}`;
+ $('#prevReportedExcel').disabled=true;
+ $('#prevNotReportedExcel').disabled=true;
+ try{
+  setPrevExcelProgress(true,1,'Starting selected-date historical crawl…');
+  notice('Building the Excel from the selected historical date. District → Block → Cluster → School will be checked; this can take several minutes for a large Not Reported list.','info');
+  const start=await silentJson(`/api/report/previous/start?date=${encodeURIComponent(date)}&status=${encodeURIComponent(status)}`,{method:'POST'});
+  const done=await pollPreviousExport(start.data.jobId);
+  setPrevExcelProgress(true,100,'Excel ready — download starting…');
+  window.location.href='/api/report/previous/download?jobId='+encodeURIComponent(start.data.jobId);
+  setTimeout(()=>setPrevExcelProgress(false,0,''),2200);
+ }finally{
+  $('#prevReportedExcel').disabled=false;
+  $('#prevNotReportedExcel').disabled=false;
+ }
 }
-$('#prevReportedExcel').addEventListener('click',()=>{
- try{
-  notice('Preparing Reported Excel for the selected date…','info');
-  window.location.href=previousExcelUrl('reported');
- }catch(e){notice(e.message)}
-});
-$('#prevNotReportedExcel').addEventListener('click',()=>{
- try{
-  notice('Preparing Not Reported Excel for the selected date…','info');
-  window.location.href=previousExcelUrl('not_reported');
- }catch(e){notice(e.message)}
-});
+$('#prevReportedExcel').addEventListener('click',()=>startPreviousExcel('reported').catch(e=>{notice(e.message);setPrevExcelProgress(false,0,'')}));
+$('#prevNotReportedExcel').addEventListener('click',()=>startPreviousExcel('not_reported').catch(e=>{notice(e.message);setPrevExcelProgress(false,0,'')}));
 
 $('#prevLoad').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});
 $('#prevReset').addEventListener('click',async()=>{try{await prevLoadDistricts()}catch(e){notice(e.message)}});

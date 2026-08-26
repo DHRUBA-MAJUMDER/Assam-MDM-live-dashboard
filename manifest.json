@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Assam MDM Historical Sync",
-  "version": "1.0.0",
-  "description": "Archives PM POSHAN historical reporting hierarchy to your Assam MDM dashboard without uploading login cookies.",
+  "version": "1.0.1",
+  "description": "Archives PM POSHAN historical hierarchy; supports both daily-only and monthly+daily historical aggregate tables.",
   "permissions": [
     "storage",
     "activeTab",

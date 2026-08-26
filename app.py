@@ -194,7 +194,7 @@ PUBLIC_DISTRICT_HISTORY_URL = "https://mdmhp.nic.in/Home/DisttWiseSummary"
 PUBLIC_BLOCK_HISTORY_URL = "https://mdmhp.nic.in/Home/BlockWiseSummary"
 PUBLIC_CLUSTER_HISTORY_URL = "https://mdmhp.nic.in/Home/ClusterWiseSummary"
 PUBLIC_SCHOOL_HISTORY_URL = "https://mdmhp.nic.in/Home/SchoolWiseSummary"
-PUBLIC_HISTORY_CACHE_VERSION = "v6.7-browser-sync"
+PUBLIC_HISTORY_CACHE_VERSION = "v6.7.1-dual-aggregate-parser"
 
 
 def normalize_district_name(value):
@@ -955,8 +955,17 @@ def parse_official_summary_html(html, level, district_code=None, block_code=None
             continue
 
         if level in {"district", "block", "cluster"}:
-            if len(cells) < 9:
+            # The public historical hierarchy has TWO observed aggregate layouts:
+            #
+            # 9 cells (monthly + daily):
+            # Sr | Name | Total | Monthly Reported | Monthly Not Reported |
+            # Enrolled | Daily Reported | Daily Not Reported | Meals
+            #
+            # 6 cells (daily-only, confirmed for BlockWiseSummary):
+            # Sr | Name | Total | Daily Reported | Daily Not Reported | Meals
+            if len(cells) < 6:
                 continue
+
             name = cells[1].strip()
             if not name:
                 continue
@@ -971,16 +980,32 @@ def parse_official_summary_html(html, level, district_code=None, block_code=None
             if not code:
                 code = _extract_numeric_code_from_row(tr, 5) or name
 
+            if len(cells) >= 9:
+                monthly_reported = to_int(cells[3])
+                monthly_not_reported = to_int(cells[4])
+                enrolled = to_int(cells[5])
+                daily_reported = to_int(cells[6])
+                daily_not_reported = to_int(cells[7])
+                meals_served = to_int(cells[8])
+            else:
+                # Daily-only historical layout.
+                monthly_reported = 0
+                monthly_not_reported = 0
+                enrolled = 0
+                daily_reported = to_int(cells[3])
+                daily_not_reported = to_int(cells[4])
+                meals_served = to_int(cells[5])
+
             rows.append({
                 level: name,
                 f"{level}Code": str(code),
                 "totalSchools": to_int(cells[2]),
-                "monthlyReported": to_int(cells[3]),
-                "monthlyNotReported": to_int(cells[4]),
-                "enrolled": to_int(cells[5]),
-                "dailyReported": to_int(cells[6]),
-                "dailyNotReported": to_int(cells[7]),
-                "mealsServed": to_int(cells[8]),
+                "monthlyReported": monthly_reported,
+                "monthlyNotReported": monthly_not_reported,
+                "enrolled": enrolled,
+                "dailyReported": daily_reported,
+                "dailyNotReported": daily_not_reported,
+                "mealsServed": meals_served,
             })
             continue
 
@@ -1970,7 +1995,7 @@ def index():
 
 @app.get("/healthz")
 def healthz():
-    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.7", "trackerDb": db_enabled()})
+    return jsonify({"ok": True, "service": "assam-mdm-dashboard-v6.7.1", "trackerDb": db_enabled()})
 
 
 @app.get("/api/districts")

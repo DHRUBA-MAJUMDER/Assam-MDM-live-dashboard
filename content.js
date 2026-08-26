@@ -21,20 +21,40 @@ function parseAggregate(html, level){
   const out=[];
   for(const tr of doc.querySelectorAll("table tbody tr")){
     const td=[...tr.querySelectorAll(":scope > td")];
-    if(td.length < 9) continue;
+    if(td.length < 6) continue;
+
     const name=txt(td[1]);
     if(!name) continue;
     const code=extractLastCode(td[1]) || extractLastCode(tr);
+
+    let monthlyReported=0, monthlyNotReported=0, enrolled=0;
+    let dailyReported=0, dailyNotReported=0, mealsServed=0;
+
+    if(td.length >= 9){
+      monthlyReported=num(txt(td[3]));
+      monthlyNotReported=num(txt(td[4]));
+      enrolled=num(txt(td[5]));
+      dailyReported=num(txt(td[6]));
+      dailyNotReported=num(txt(td[7]));
+      mealsServed=num(txt(td[8]));
+    }else{
+      // Public historical daily-only aggregate layout:
+      // Sr | Name | Total | Reported | Not Reported | Meals
+      dailyReported=num(txt(td[3]));
+      dailyNotReported=num(txt(td[4]));
+      mealsServed=num(txt(td[5]));
+    }
+
     out.push({
       [level]:name,
       [level+"Code"]:code,
       totalSchools:num(txt(td[2])),
-      monthlyReported:num(txt(td[3])),
-      monthlyNotReported:num(txt(td[4])),
-      enrolled:num(txt(td[5])),
-      dailyReported:num(txt(td[6])),
-      dailyNotReported:num(txt(td[7])),
-      mealsServed:num(txt(td[8]))
+      monthlyReported,
+      monthlyNotReported,
+      enrolled,
+      dailyReported,
+      dailyNotReported,
+      mealsServed
     });
   }
   return out;
